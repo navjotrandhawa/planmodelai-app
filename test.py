@@ -1,4 +1,4 @@
-# portal.py — PlanModelAI Unified Executive Architecture Portal (Public Beta Testing)
+# portal.py — PickModelAI Unified Executive Architecture Portal (Public Beta Testing)
 import os
 import re
 import json
@@ -44,8 +44,8 @@ LEADS_DIR = BASE_DIR / "captured_leads"
 LEADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Optional fallback to sibling folders if testing existing Vault IDs
-PRODUCT_B_LEADS_DIR = BASE_DIR.parent / "planmodelai-product-b" / "captured_leads"
-PRODUCT_C_LEADS_DIR = BASE_DIR.parent / "planmodelai-product-c" / "captured_leads"
+PRODUCT_B_LEADS_DIR = BASE_DIR.parent / "pickmodelai-product-b" / "captured_leads"
+PRODUCT_C_LEADS_DIR = BASE_DIR.parent / "pickmodelai-product-c" / "captured_leads"
 
 
 def get_config(key: str, default: str = "") -> str:
@@ -64,7 +64,7 @@ DEV_MODE = get_config("DEV_MODE", "False").lower() == "true"
 MAX_DAILY_GENERATIONS_PER_IP = 5
 
 st.set_page_config(
-    page_title="PlanModelAI — AI Delivery Plan Suite",
+    page_title="PickModelAI — AI Delivery Plan Suite",
     page_icon="📐",
     layout="wide",
 )
@@ -208,7 +208,7 @@ class _ContinuityVaultAgent(PlanModelVaultAgent):
         if target in tiers:
             return {
                 "allowed": False,
-                "reason": f"Tier {target} has already been generated for {vault_id}. Contact support@planmodelai.com for revisions.",
+                "reason": f"Tier {target} has already been generated for {vault_id}. Contact support@pickmodelai.com for revisions.",
                 "warning": "",
             }
         if target == "3" and not tiers.intersection({"1", "2"}):
@@ -561,7 +561,7 @@ def lookup_city_from_pin(country: str, pin_code: str) -> Tuple[bool, str, str]:
     if not re.match(rules["pin_regex"], clean_pin, re.IGNORECASE):
         return False, "", f"Invalid PIN/Postal code for {country}. Expected: {rules['pin_hint']}."
     iso = rules["iso"]
-    headers = {"User-Agent": "PlanModelAI/1.0"}
+    headers = {"User-Agent": "PickModelAI/1.0"}
 
     if iso == "IN":
         try:
@@ -753,7 +753,7 @@ def generate_assessment_from_llm(user_profile: str, core_idea: str, volume_priva
     lifecycle = _prepare_vault_generation(None, "1")
     modality = detect_primary_modality(core_idea)
     live_web_research = fetch_live_ai_model_research(core_idea, volume_privacy, modality)
-    system_prompt = """You are a principal AI solutions architect at PlanModelAI.com creating a plain-English AI Feasibility Report.
+    system_prompt = """You are a principal AI solutions architect at PickModelAI.com creating a plain-English AI Feasibility Report.
 DETECTED PROJECT MODALITY: {modality}
 LIVE ONLINE RESEARCH RESULTS:
 <live_web_research>
@@ -964,7 +964,7 @@ def generate_product_b_document(project_context: str, core_idea: str, vault_id: 
             "and scale 15,000 and 100,000 runs monotonically upward. Do NOT invent a new baseline."
         )
 
-    system_prompt = """You are a Principal AI Solutions Architect at PlanModelAI.com generating Product B: The Full DIY Engineering Blueprint (Beta Testing).
+    system_prompt = """You are a Principal AI Solutions Architect at PickModelAI.com generating Product B: The Full DIY Engineering Blueprint (Beta Testing).
 DETECTED MODALITY: {modality}
 STRICT ARCHITECTURAL RULES:
 1. MODALITY LOCK: If VOICE_AUDIO, use Speech-to-Text + LLM + Text-to-Speech. NEVER recommend video models.
@@ -1044,10 +1044,10 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
     generated_date = datetime.now().strftime("%B %d, %Y")
     scope_note = (
         f"Scope locked to verified Client Vault ID <code class='pm-vault-id'>{vault_id}</code>. To modify project scope or request fresh reports, "
-        "please email <b>support@planmodelai.com</b>."
+        "please email <b>support@pickmodelai.com</b>."
         if is_vault_locked
         else f"Generated from new discovery session and locked under Client Vault ID <code class='pm-vault-id'>{vault_id}</code>. "
-        "To request scope revisions, contact <b>support@planmodelai.com</b>."
+        "To request scope revisions, contact <b>support@pickmodelai.com</b>."
     )
 
     with st.container():
@@ -1055,7 +1055,7 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
             f"""
             <div class="pm-doc-container">
                 <div class="pm-header-bar">
-                    <div class="pm-sub-tag">PLANMODELAI.COM — FULL DIY ENGINEERING BLUEPRINT (PRODUCT B • BETA TESTING)</div>
+                    <div class="pm-sub-tag">PICKMODELAI.COM — FULL DIY ENGINEERING BLUEPRINT (PRODUCT B • BETA TESTING)</div>
                     <div class="pm-doc-title">{report.get('report_title', '')}</div>
                     <div class="pm-badges">
                         Stack: {report.get('stack_badge', '')}  | 
@@ -1164,7 +1164,7 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
                 <i>Note on Section 5 Implementation: The code provided in <b>5. Complete Production Python Implementation</b> is a reference example; actual implementation code may differ or get updated as underlying SDKs, APIs, and production requirements evolve.</i>
             </div>
             <div class="pm-footer">
-                PlanModelAI.com — Full DIY Engineering Blueprint (Beta Testing) • Generated on {generated_date} • Client Vault ID: <code class="pm-vault-id">{vault_id}</code>
+                PickModelAI.com — Full DIY Engineering Blueprint (Beta Testing) • Generated on {generated_date} • Client Vault ID: <code class="pm-vault-id">{vault_id}</code>
             </div>
             </div>
             """,
@@ -1386,7 +1386,7 @@ class EnhancedEnterpriseBlueprintReport(BaseModel):
 
 
 def generate_dynamic_questions(vault_context: str) -> List[str]:
-    system_prompt = """You are a Principal Enterprise AI Architect at PlanModelAI.com.
+    system_prompt = """You are a Principal Enterprise AI Architect at PickModelAI.com.
 We have retrieved the client's project scope from their verified Vault ID:
 <scope>
 {vault_context}
@@ -1427,7 +1427,7 @@ def generate_product_c_document(project_context: str, dynamic_answers: str, core
             "In Section 8, 2x, 5x, and 10x columns MUST strictly increase with traffic (e.g., 1.8x, 4.0x, 7.5x of baseline) — NEVER repeat the 1x number across all columns."
         )
 
-    system_prompt = """You are a Principal Enterprise AI Solutions Architect at PlanModelAI.com generating Product C: The Enhanced Enterprise Architectural Blueprint (Beta Testing).
+    system_prompt = """You are a Principal Enterprise AI Solutions Architect at PickModelAI.com generating Product C: The Enhanced Enterprise Architectural Blueprint (Beta Testing).
 Produce an institutional, board-ready 9-section systems engineering and multi-scale financial blueprint.
 
 CRITICAL FOUNDATION — LOCKED USER SCOPE:
@@ -1627,10 +1627,10 @@ def render_on_page_enterprise_blueprint(
 
     scope_note = (
         f"Scope locked to verified Client Vault ID <code class='pm-vault-id'>{safe_vault_id}</code> (imported from <b>{imported_from_tier}</b>). "
-        "To modify project scope or request fresh reports, please email <b>support@planmodelai.com</b>."
+        "To modify project scope or request fresh reports, please email <b>support@pickmodelai.com</b>."
         if imported_from_tier
         else f"Generated from enterprise discovery session and locked under Client Vault ID <code class='pm-vault-id'>{safe_vault_id}</code>. "
-        "To request scope revisions, contact <b>support@planmodelai.com</b>."
+        "To request scope revisions, contact <b>support@pickmodelai.com</b>."
     )
 
     with st.container():
@@ -1638,7 +1638,7 @@ def render_on_page_enterprise_blueprint(
             f"""
             <div class="pm-doc-container">
                 <div class="pm-header-bar">
-                    <div class="pm-sub-tag">PLANMODELAI.COM — ENHANCED ENTERPRISE ARCHITECTURAL BLUEPRINT (PRODUCT C • BETA TESTING)</div>
+                    <div class="pm-sub-tag">PICKMODELAI.COM — ENHANCED ENTERPRISE ARCHITECTURAL BLUEPRINT (PRODUCT C • BETA TESTING)</div>
                     <div class="pm-doc-title">{report.get('report_title', '')}</div>
                     <div class="pm-badges">
                         Target System: {report.get('target_system_badge', '')}  | 
@@ -1849,7 +1849,7 @@ def render_on_page_enterprise_blueprint(
 
 
 # Development-only assertions; disabled in production unless explicitly requested.
-if __name__ == "__main__" and os.getenv("PLANMODELAI_RUN_SELF_TESTS") == "1":
+if __name__ == "__main__" and os.getenv("PICKMODELAI_RUN_SELF_TESTS") == "1":
     from tempfile import TemporaryDirectory
 
     assert VAULT_ID_REGEX.fullmatch("PMAI-GCCF-2422") is None
@@ -2022,7 +2022,7 @@ last_vid = (
 )
 
 with st.sidebar:
-    st.title("📐 PlanModelAI.com")
+    st.title("📐 PickModelAI.com")
     st.caption("Unified Architecture Suite • Beta Testing")
     st.markdown("---")
 
@@ -2071,7 +2071,7 @@ with st.sidebar:
 # VIEW 0: EXECUTIVE SHOWCASE HUB (LANDING PAGE WITH LAUNCH BUTTONS)
 # ===========================================================================
 if st.session_state.active_view == "HUB":
-    st.title("📐 PlanModelAI — Executive AI Systems Architecture Suite (Beta Testing)")
+    st.title("📐 PickModelAI — Executive AI Systems Architecture Suite (Beta Testing)")
     st.markdown(
         "**From Day-1 Client Engagement to Multi-Scale Enterprise Deployment.** "
         "Select any architecture tier below during our **Beta Testing** phase to launch its dedicated AI Solutions Architect chatbot and generate your blueprint."
@@ -2162,7 +2162,7 @@ if st.session_state.active_view == "HUB":
 elif st.session_state.active_view == "A":
     QUESTIONS_A = [
         (
-            "Welcome to **PlanModelAI — Product A: Genesis Architecture Diagnostic (Beta Testing)**! 👋\n\n"
+            "Welcome to **PickModelAI — Product A: Genesis Architecture Diagnostic (Beta Testing)**! 👋\n\n"
             "**Question 1 of 4:** What do you want your AI system to do, and what type of data will it process or create "
             "(e.g., text/emails, code, long PDFs, images, video, or voice/audio)? *(Please answer in under 100 words)*"
         ),
@@ -2182,7 +2182,7 @@ elif st.session_state.active_view == "A":
     ]
     WORD_LIMITS_A = [100, 100, 75, 50]
 
-    st.title("📐 PlanModelAI — Product A: AI Architecture Diagnostic (Beta Testing)")
+    st.title("📐 PickModelAI — Product A: AI Architecture Diagnostic (Beta Testing)")
     st.caption("Beta Testing Edition • Answer 4 quick questions to get live-researched stack options, cloud TCO, and a 2-page PDF blueprint.")
 
     allowed, _ = check_and_increment_rate_limit(increment=False)
@@ -2273,7 +2273,7 @@ elif st.session_state.active_view == "A":
         st.download_button(
             label="📥 Download Your 2-Page Architecture Blueprint (PDF)",
             data=st.session_state.pdf_bytes,
-            file_name=f"PlanModelAI_ProductA_{ref_id}.pdf",
+            file_name=f"PickModelAI_ProductA_{ref_id}.pdf",
             mime="application/pdf",
             type="primary",
             use_container_width=True,
@@ -2296,9 +2296,9 @@ elif st.session_state.active_view == "A":
 elif st.session_state.active_view == "B":
     QUESTIONS_B = [
         (
-            "Welcome to **PlanModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)**! 📘\n\n"
+            "Welcome to **PickModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)**! 📘\n\n"
             "You can proceed in **one of two ways** (strict scope integrity enforced):\n"
-            "- **Option A (Vault ID Import):** Paste your existing **Client Vault ID** (e.g., `PMAI-BCEC-98ED`) at any point to lock onto your verified Product A scope. *(To modify a saved scope, email **support@planmodelai.com**.)*\n"
+            "- **Option A (Vault ID Import):** Paste your existing **Client Vault ID** (e.g., `PMAI-BCEC-98ED`) at any point to lock onto your verified Product A scope. *(To modify a saved scope, email **support@pickmodelai.com**.)*\n"
             "- **Option B (New Project Discovery):** Answer **Question 1 of 4** below:\n\n"
             "**Question 1 of 4:** What is the core AI system or automation product you want to build, what data does it process, "
             "and how often should it run (e.g., real-time API, twice-daily cron publisher, or batch workflow)? *(Max 200 words)*"
@@ -2317,7 +2317,7 @@ elif st.session_state.active_view == "B":
         ),
     ]
 
-    st.title("📘 PlanModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)")
+    st.title("📘 PickModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)")
     st.caption("Beta Testing Edition • Enter your Client Vault ID or complete 4 discovery questions to render your 7-section engineering blueprint on-page.")
 
     if last_vid:
@@ -2392,7 +2392,7 @@ elif st.session_state.active_view == "B":
                             "content": (
                                 f"🔒 **Client Vault ID `{candidate_id}` Verified & Locked!**\n\n"
                                 "Your saved project scope and baseline cost model have been loaded directly from the vault. "
-                                "If you need to modify your project scope or request fresh reports, please contact **support@planmodelai.com**.\n\n"
+                                "If you need to modify your project scope or request fresh reports, please contact **support@pickmodelai.com**.\n\n"
                                 "Please complete your **Client Contact Details** below to render your Product B blueprint."
                             ),
                         })
@@ -2432,7 +2432,7 @@ elif st.session_state.active_view == "B":
     if st.session_state.b_stage == "CONTACT_FORM":
         st.subheader("📋 Client Contact Verification")
         if st.session_state.b_imported_vault_id:
-            st.info(f"🔒 **Locked to Client Vault ID `{st.session_state.b_imported_vault_id}`** — Need to change your project scope? Email **support@planmodelai.com**.")
+            st.info(f"🔒 **Locked to Client Vault ID `{st.session_state.b_imported_vault_id}`** — Need to change your project scope? Email **support@pickmodelai.com**.")
 
         col_c, col_p, col_btn = st.columns([2, 2, 1.3])
         with col_c:
@@ -2561,7 +2561,7 @@ elif st.session_state.active_view == "B":
 # VIEW 3: PRODUCT C — ENHANCED ENTERPRISE ARCHITECTURAL BLUEPRINT
 # ===========================================================================
 elif st.session_state.active_view == "C":
-    st.title("🏛️ PlanModelAI — Product C: Enhanced Enterprise Architectural Blueprint (Beta Testing)")
+    st.title("🏛️ PickModelAI — Product C: Enhanced Enterprise Architectural Blueprint (Beta Testing)")
     st.caption("Enterprise Architecture Tier (Beta Testing) • Requires a verified Product B or Product A Client Vault ID.")
     if st.session_state.get("c_lifecycle_warning"):
         st.warning(st.session_state.c_lifecycle_warning)
@@ -2575,7 +2575,7 @@ elif st.session_state.active_view == "C":
             {
                 "role": "assistant",
                 "content": (
-                    "Welcome to **PlanModelAI — Product C: Enhanced Enterprise Architectural Blueprint (Beta Testing)**! 🏛️\n\n"
+                    "Welcome to **PickModelAI — Product C: Enhanced Enterprise Architectural Blueprint (Beta Testing)**! 🏛️\n\n"
                     "Product C is our **Enterprise Architectural Blueprint**. "
                     "To maintain strict scope integrity, **Product C requires a verified Client Vault ID from Product A or Product B**.\n\n"
                     "Please enter your verified **Client Vault ID** (e.g., `PMAI-BCEC-98ED`) below to begin."
