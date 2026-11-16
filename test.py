@@ -2661,12 +2661,45 @@ elif st.session_state.active_view == "A":
 # VIEW 2: PRODUCT B — FULL DIY ENGINEERING BLUEPRINT
 # ===========================================================================
 elif st.session_state.active_view == "B":
+    import os
+    import json
+    import uuid
+
+    def _persist_product_b_blueprint(contact, project_inputs, report_data, existing_vault_id=None):
+        """Safely persists Product B output to local JSON and Vault Agent."""
+        vault_id = existing_vault_id if existing_vault_id else f"PMAI-{uuid.uuid4().hex[:4].upper()}-{uuid.uuid4().hex[:4].upper()}"
+        output_dir = "captured_leads"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        payload = {
+            "vault_id": vault_id,
+            "tier": "Tier 2 (Product B — DIY Engineering Blueprint)",
+            "contact": contact,
+            "user_inputs": project_inputs,
+            "report_data": report_data,
+        }
+        
+        file_path = os.path.join(output_dir, f"{vault_id}_ProductB.json")
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=4, default=str)
+            
+        try:
+            vault = get_vault_agent()
+            if vault and hasattr(vault, "store_client_report"):
+                vault.store_client_report(
+                    vault_id=vault_id,
+                    tier="Tier 2 (Product B — DIY Engineering Blueprint)",
+                    user_inputs=project_inputs,
+                    report_data=report_data,
+                    contact=contact,
+                )
+        except Exception:
+            pass
+            
+        return vault_id
+
     QUESTIONS_B = [
         (
-            "Welcome to **PickModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)**! 📘\n\n"
-            "You can proceed in **one of two ways** (strict scope integrity enforced):\n"
-            "- **Option A (Vault ID Import):** Paste your existing **Client Vault ID** (e.g., `PMAI-BCEC-98ED`) at any point to lock onto your verified Product A scope. *(To modify a saved scope, email **support@pickmodelai.com**.)*\n"
-            "- **Option B (New Project Discovery):** Answer **Question 1 of 4** below:\n\n"
             "**Question 1 of 4:** What is the core AI system or automation product you want to build, what data does it process, "
             "and how often should it run (e.g., real-time API, twice-daily cron publisher, or batch workflow)? *(Max 200 words)*"
         ),
@@ -2685,16 +2718,25 @@ elif st.session_state.active_view == "B":
     ]
 
     st.title("📘 PickModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)")
-    st.caption("Beta Testing Edition • Enter your Client Vault ID or complete 4 discovery questions to render your 7-section engineering blueprint on-page.")
+    st.caption("Beta Testing Edition • Requires a verified Product A Client Vault ID, followed by 4 engineering discovery questions.")
 
     if last_vid:
-        st.info(f"🔑 **Detected Active Session Vault ID:** `{last_vid}` — Copy and paste this ID below to lock your scope instantly.")
+        st.info(f"🔑 **Detected Active Session Vault ID:** `{last_vid}` — Copy and paste this ID below to unlock Product B.")
 
     if "b_stage" not in st.session_state:
-        st.session_state.b_stage = "CHAT_Q"
+        st.session_state.b_stage = "VAULT_GATE"
         st.session_state.b_q_index = 0
         st.session_state.b_answers = []
-        st.session_state.b_messages = [{"role": "assistant", "content": QUESTIONS_B[0]}]
+        st.session_state.b_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Welcome to **PickModelAI — Product B: Full DIY Engineering Blueprint (Beta Testing)**! 📘\n\n"
+                    "To maintain strict architectural scope integrity, **Product B requires a verified Client Vault ID from Product A**.\n\n"
+                    "Please enter your verified **Client Vault ID** (e.g., `PMAI-5005-3F54`) below to validate your baseline diagnostic and begin the 4-question engineering discovery."
+                ),
+            }
+        ]
         st.session_state.b_imported_vault_id = None
         st.session_state.b_imported_context = None
         st.session_state.b_contact = None
@@ -2707,10 +2749,87 @@ elif st.session_state.active_view == "B":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if st.session_state.b_stage == "CHAT_Q":
-        user_msg = st.chat_input("Enter Client Vault ID (e.g., PMAI-BCEC-98ED) or answer the current question (Max 200 words)...")
-        if st.button("Import sidebar Client Vault ID", key="b_import_sidebar", disabled=not bool(VAULT_ID_REGEX.fullmatch(sidebar_vault_id))):
-            user_msg = sidebar_vault_id
+    # --- STAGE 1: MANDATORY PRODUCT A VAULT ID VALIDATION ---
+    if st.session_state.b_stage == "VAULT_GATE":
+        vault_input = st.chat_input("Enter your verified Product A Client Vault ID (e.g., PMAI-5005-3F54)...")
+        if st.button(
+            "Import sidebar Client Vault ID",
+            key="b_import_sidebar",
+            disabled=not bool(VAULT_ID_REGEX.fullmatch(sidebar_vault_id)),
+        ):
+            vault_input = sidebar_vault_id
+
+        if vault_input:
+            cleaned_vid = vault_input.strip()
+            st.session_state.b_messages.append({"role": "user", "content": cleaned_vid})
+            vault_match = VAULT_ID_REGEX.search(cleaned_vid.upper())
+
+            if not vault_match:
+                st.session_state.b_messages.append({
+                    "role": "assistant",
+                    "content": "⚠️ **Invalid Vault ID format.** Please enter a valid Product A Vault ID formatted as `PMAI-XXXX-XXXX` (hexadecimal characters 0–9 and A–F).",
+                })
+                st.rerun()
+            else:
+                candidate_id = vault_match.group(0).upper()
+                vault = get_vault_agent()
+                try:
+                    records = vault.retrieve_client_reports(candidate_id) if vault else []
+                except Exception as exc:
+                    st.error(f"Vault retrieval error: {exc}")
+                    st.stop()
+
+                if not records:
+                    st.session_state.b_messages.append({
+                        "role": "assistant",
+                        "content": f"⚠️ No verified Product A blueprint was found for **`{candidate_id}`**. Please generate Product A first or verify your Vault ID.",
+                    })
+                    st.rerun()
+                else:
+                    gate = vault.check_tier_generation_allowed(candidate_id, "2")
+                    if not gate.get("allowed", True):
+                        st.error(gate.get("reason", "Tier 2 generation not permitted for this Vault ID."))
+                        st.stop()
+
+                    rec = next((r for r in records if _tier_number(r.get("tier", "")) == "1"), records[0])
+                    locked_paid, locked_oss = _extract_locked_costs_from_records(records)
+                    inp = rec.get("user_inputs", {})
+                    rep = rec.get("report_data", {})
+
+                    st.session_state.b_imported_vault_id = candidate_id
+                    cost_lines = ""
+                    if locked_paid:
+                        cost_lines += f"\nLOCKED Baseline Managed Cloud Monthly OpEx (from Product A): ${locked_paid}/month"
+                    if locked_oss:
+                        cost_lines += f"\nLOCKED Baseline Private VPC Monthly OpEx (from Product A): ${locked_oss}/month"
+
+                    st.session_state.b_imported_context = (
+                        f"Locked Vault Record ({candidate_id} — {rec.get('tier', 'Tier 1 (Product A — Genesis Diagnostic)')}):\n"
+                        f"- Baseline Goal & Modality: {inp.get('goal', '')}\n"
+                        f"- Baseline Target Users & Workflow: {inp.get('workflow', '')}\n"
+                        f"- Baseline Constraints & Compliance: {inp.get('constraints', '')}\n"
+                        f"- Baseline Budget Target: {inp.get('budget', '')}\n"
+                        f"- Prior Recommended Cloud Stack: {rep.get('paid_stack_summary', '')}\n"
+                        f"- Prior Recommended VPC Stack: {rep.get('oss_stack_summary', '')}"
+                        f"{cost_lines}"
+                    )
+
+                    # Move to 4-question discovery stage ONLY after Vault ID is verified
+                    st.session_state.b_stage = "CHAT_Q"
+                    st.session_state.b_q_index = 0
+                    st.session_state.b_messages.append({
+                        "role": "assistant",
+                        "content": (
+                            f"✅ **Client Vault ID `{candidate_id}` Verified Successfully!**\n\n"
+                            "Your Product A baseline scope and TCO metrics are now locked. Let's complete the 4 engineering discovery questions to tailor your DIY Blueprint.\n\n"
+                            f"{QUESTIONS_B[0]}"
+                        ),
+                    })
+                    st.rerun()
+
+    # --- STAGE 2: 4-QUESTION ENGINEERING DISCOVERY ---
+    elif st.session_state.b_stage == "CHAT_Q":
+        user_msg = st.chat_input(f"Answer Question {st.session_state.b_q_index + 1} of 4 (Max 200 words)...")
         if user_msg:
             ok, err = validate_chat_answer(user_msg, max_words=MAX_WORDS_PER_ANSWER)
             if not ok:
@@ -2718,88 +2837,30 @@ elif st.session_state.active_view == "B":
             else:
                 cleaned_msg = user_msg.strip()
                 st.session_state.b_messages.append({"role": "user", "content": cleaned_msg})
-                vault_match = VAULT_ID_REGEX.search(cleaned_msg)
-                if vault_match:
-                    candidate_id = vault_match.group(0).upper()
-                    vault = get_vault_agent()
-                    try:
-                        records = vault.retrieve_client_reports(candidate_id) if vault else []
-                    except Exception as exc:
-                        st.error(str(exc))
-                        st.stop()
-                    if records:
-                        gate = vault.check_tier_generation_allowed(candidate_id, "2")
-                        if not gate["allowed"]:
-                            st.error(gate["reason"])
-                            st.stop()
-                        rec = next((r for r in records if _tier_number(r.get("tier", "")) == "1"), records[0])
-                        locked_paid, locked_oss = _extract_locked_costs_from_records(records)
-                        inp = rec.get("user_inputs", {})
-                        rep = rec.get("report_data", {})
-                        st.session_state.b_answers = [inp.get(key, "") for key in ("goal", "workflow", "constraints", "budget")]
-                        st.session_state.b_imported_vault_id = candidate_id
-                        cost_lines = ""
-                        if locked_paid:
-                            cost_lines += f"\n- LOCKED Baseline Managed Cloud Monthly OpEx (from Product A): ${locked_paid}/month"
-                        if locked_oss:
-                            cost_lines += f"\n- LOCKED Baseline Private VPC Monthly OpEx (from Product A): ${locked_oss}/month"
-                        st.session_state.b_imported_context = (
-                            f"Locked Vault Record ({candidate_id} — {rec.get('tier', 'Tier 1 (Product A — Genesis Diagnostic)')}):\n"
-                            f"- Core Goal & Modality: {inp.get('goal', '')}\n"
-                            f"- Target Users & Workflow: {inp.get('workflow', '')}\n"
-                            f"- Constraints & Compliance: {inp.get('constraints', '')}\n"
-                            f"- Budget Target: {inp.get('budget', '')}\n"
-                            f"- Prior Recommended Cloud Stack: {rep.get('paid_stack_summary', '')}\n"
-                            f"- Prior Recommended VPC Stack: {rep.get('oss_stack_summary', '')}"
-                            f"{cost_lines}"
-                        )
-                        st.session_state.b_stage = "CONTACT_FORM"
-                        st.session_state.b_messages.append({
-                            "role": "assistant",
-                            "content": (
-                                f"🔒 **Client Vault ID `{candidate_id}` Verified & Locked!**\n\n"
-                                "Your saved project scope and baseline cost model have been loaded directly from the vault. "
-                                "If you need to modify your project scope or request fresh reports, please contact **support@pickmodelai.com**.\n\n"
-                                "Please complete your **Client Contact Details** below to render your Product B blueprint."
-                            ),
-                        })
-                        st.rerun()
-                    else:
-                        st.session_state.b_messages.append({
-                            "role": "assistant",
-                            "content": (
-                                f"⚠️ No verified blueprint was found for **`{candidate_id}`**. "
-                                f"Please check your Vault ID or continue answering **Question {st.session_state.b_q_index + 1} of 4**."
-                            ),
-                        })
-                        st.rerun()
-                elif "PMAI-" in cleaned_msg.upper():
+                st.session_state.b_answers.append(cleaned_msg)
+                st.session_state.b_q_index += 1
+
+                if st.session_state.b_q_index < 4:
                     st.session_state.b_messages.append({
                         "role": "assistant",
-                        "content": "⚠️ Invalid Vault ID. Use PMAI-XXXX-XXXX with hexadecimal characters 0–9 and A–F; check 6 versus G.",
+                        "content": QUESTIONS_B[st.session_state.b_q_index],
                     })
-                    st.rerun()
                 else:
-                    st.session_state.b_answers.append(cleaned_msg)
-                    st.session_state.b_q_index += 1
-                    if st.session_state.b_q_index < 4:
-                        st.session_state.b_messages.append({"role": "assistant", "content": QUESTIONS_B[st.session_state.b_q_index]})
-                    else:
-                        st.session_state.b_stage = "CONTACT_FORM"
-                        st.session_state.b_messages.append({
-                            "role": "assistant",
-                            "content": (
-                                "🎯 **All 4 discovery answers recorded!**\n\n"
-                                "Please select your **Country** and enter your **PIN / Postal Code** first to auto-verify your City, "
-                                "then complete your contact details below."
-                            ),
-                        })
-                    st.rerun()
+                    st.session_state.b_stage = "CONTACT_FORM"
+                    st.session_state.b_messages.append({
+                        "role": "assistant",
+                        "content": (
+                            "🎯 **All 4 engineering discovery answers recorded!**\n\n"
+                            "Please select your **Country** and enter your **PIN / Postal Code** first to auto-verify your City, "
+                            "then complete your contact details below to generate your blueprint."
+                        ),
+                    })
+                st.rerun()
 
+    # --- STAGE 3: CONTACT VERIFICATION & ARCHITECT-GRADE GENERATION ---
     if st.session_state.b_stage == "CONTACT_FORM":
         st.subheader("📋 Client Contact Verification")
-        if st.session_state.b_imported_vault_id:
-            st.info(f"🔒 **Locked to Client Vault ID `{st.session_state.b_imported_vault_id}`** — Need to change your project scope? Email **support@pickmodelai.com**.")
+        st.info(f"🔒 **Locked to Verified Client Vault ID `{st.session_state.b_imported_vault_id}`** — All 4 discovery answers captured.")
 
         col_c, col_p, col_btn = st.columns([2, 2, 1.3])
         with col_c:
@@ -2866,32 +2927,44 @@ elif st.session_state.active_view == "B":
                     "pin_code": entered_pin.strip().upper(),
                 }
                 st.session_state.b_contact = contact_dict
-                if st.session_state.b_imported_context:
-                    full_context = st.session_state.b_imported_context
-                    core_idea_text = st.session_state.b_answers[0] if st.session_state.b_answers else full_context
-                    structured_inputs = dict(zip(
-                        ("goal", "workflow", "constraints", "budget"),
-                        st.session_state.b_answers,
-                    ))
-                else:
-                    ans = st.session_state.b_answers
-                    full_context = (
-                        f"1. Core AI System, Modality & Cadence: {ans[0]}\n"
-                        f"2. Commercial SaaS Replaced & Scale Metrics: {ans[1]}\n"
-                        f"3. Preferred Cloud/VPC Stack & Compliance Rules: {ans[2]}\n"
-                        f"4. Target Monthly Budget & Launch Timeline: {ans[3]}"
-                    )
-                    core_idea_text = ans[0]
-                    structured_inputs = {"goal": ans[0], "workflow": ans[1], "constraints": ans[2], "budget": ans[3]}
+                ans = st.session_state.b_answers
 
-                with st.spinner("Generating your DIY Engineering Blueprint..."):
+                # Combine Product A locked context + Product B 4 answers + Strict Architect Anti-Hallucination Directives
+                full_context = (
+                    f"{st.session_state.b_imported_context}\n\n"
+                    f"--- PRODUCT B ENGINEERING DISCOVERY INPUTS ---\n"
+                    f"1. Core AI System, Modality & Cadence: {ans[0]}\n"
+                    f"2. Commercial SaaS Replaced & Scale Metrics: {ans[1]}\n"
+                    f"3. Preferred Cloud/VPC Stack & Compliance Rules: {ans[2]}\n"
+                    f"4. Target Monthly Budget & Launch Timeline: {ans[3]}\n\n"
+                    f"--- MANDATORY PRINCIPAL ARCHITECT GENERATION GUARDRAILS ---\n"
+                    f"- STRICT ACCURACY & ZERO HALLUCINATION: Use only verified, existing libraries, real SDK methods, and valid cloud services aligned with the locked Product A baseline and the 4 discovery answers above. Do not invent fake packages, non-existent API parameters, or unverified metrics.\n"
+                    f"- CODE REFERENCE DISCLAIMER: Every code block, script, or configuration template generated MUST include a clear header comment stating: "
+                    f"'# *SUBJECT TO CHANGE — JUST FOR REFERENCE: Reference architecture template; validate and adapt before production deployment.*'"
+                )
+                core_idea_text = ans[0]
+                structured_inputs = {
+                    "goal": ans[0],
+                    "workflow": ans[1],
+                    "constraints": ans[2],
+                    "budget": ans[3],
+                    "vault_baseline": st.session_state.b_imported_context,
+                }
+
+                with st.spinner("Generating your Architect-Verified DIY Engineering Blueprint..."):
                     try:
                         report_dict = generate_product_b_document(
                             project_context=full_context,
                             core_idea=core_idea_text,
                             vault_id=st.session_state.b_imported_vault_id,
                         )
-                        final_vault_id = persist_lead_and_blueprint(
+                        if isinstance(report_dict, dict):
+                            report_dict["code_disclaimer"] = (
+                                "*Subject to change — just for reference: All code examples, webhook schemas, and deployment scripts "
+                                "provided in this blueprint are reference templates and must be reviewed, tested, and adapted before production use."
+                            )
+
+                        final_vault_id = _persist_product_b_blueprint(
                             contact=contact_dict,
                             project_inputs=structured_inputs,
                             report_data=report_dict,
@@ -2904,13 +2977,16 @@ elif st.session_state.active_view == "B":
                     except Exception as exc:
                         st.error(f"⚠️ Failed to generate blueprint: {exc}")
 
+    # --- STAGE 4: RENDER REPORT & DISCLAIMER ---
     if st.session_state.b_stage == "REPORT_READY" and st.session_state.b_report is not None:
         st.success(f"✅ **Product B Engineering Blueprint Generated!** Saved under Vault ID `{st.session_state.b_final_vault_id}` with a recovery record in `captured_leads/`.")
+        st.warning("📌 **Note on Code Examples:** *All code snippets, orchestration templates, and deployment scripts provided below are **subject to change and just for reference**. Please review, configure environment variables, and test in a staging environment before production use.*")
+        
         render_on_page_blueprint_b(
             report=st.session_state.b_report,
             contact=st.session_state.b_contact,
             vault_id=st.session_state.b_final_vault_id,
-            is_vault_locked=bool(st.session_state.b_imported_vault_id),
+            is_vault_locked=True,
         )
         cb1, cb2 = st.columns(2)
         with cb1:
@@ -2919,7 +2995,11 @@ elif st.session_state.active_view == "B":
                 st.rerun()
         with cb2:
             if st.button("🔄 Start a New Product B Blueprint", use_container_width=True):
-                for k in ["b_stage", "b_q_index", "b_answers", "b_messages", "b_imported_vault_id", "b_imported_context", "b_contact", "b_report", "b_final_vault_id", "b_autofilled_city", "b_pin_status"]:
+                for k in [
+                    "b_stage", "b_q_index", "b_answers", "b_messages",
+                    "b_imported_vault_id", "b_imported_context", "b_contact",
+                    "b_report", "b_final_vault_id", "b_autofilled_city", "b_pin_status"
+                ]:
                     st.session_state.pop(k, None)
                 st.rerun()
 
