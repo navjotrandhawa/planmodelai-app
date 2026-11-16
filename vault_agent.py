@@ -228,7 +228,7 @@ class PlanModelVaultAgent:
         combined_context = "\n\n".join(context_blocks)
 
         prompt = (
-            "You are PlanModelAI's Agentic Vault Architect. A returning client authenticated via their "
+            "You are PickModelAI's Agentic Vault Architect. A returning client authenticated via their "
             "cryptographic Client Reference ID. Answer their question concisely and accurately using ONLY "
             "their decrypted blueprint records below. Provide concrete cost, AWS sizing, or guardrail details.\n\n"
             f"DECRYPTED CLIENT VAULT RECORDS:\n{combined_context}\n\n"
@@ -321,7 +321,7 @@ class PlanModelVaultAgent:
 
         analytics_prompt = (
             "You are a Principal AI Solutions Architect analyzing anonymized enterprise demand data from "
-            "PlanModelAI's Qdrant vector database. Synthesize key trends, average cost patterns, common "
+            "PickModelAI's Qdrant vector database. Synthesize key trends, average cost patterns, common "
             "architectural bottlenecks, and recommendations based on the retrieved matches below.\n\n"
             f"ANALYST QUERY: {analytics_query}\n\n"
             f"RETRIEVED ANONYMIZED BLUEPRINTS:\n{json.dumps(matches_summary, indent=2)}"
