@@ -1,0 +1,89 @@
+# VERIFIED AI MODEL REFERENCE & BUSINESS USE CASES
+
+## 1. TEXT & REASONING MODELS
+
+### The "Frontier" Paid Stack (High Performance, High Budget)
+*   **GPT-5 (OpenAI)**: 
+    *   *Best for:* Software Engineering, Complex Math, Advanced Data Analysis.
+    *   *Use when:* The client is building a dev-tool, a coding assistant, or needs the absolute highest reasoning capability regardless of cost.
+*   **Claude Opus 4.8 (Anthropic)**: 
+    *   *Best for:* Legal Document Analysis, Creative Writing, Healthcare Summarization.
+    *   *Use when:* The client needs deep, nuanced understanding of long documents (contracts, medical records) or high-quality editorial prose.
+*   **Gemini 2.5 Pro (Google)**: 
+    *   *Best for:* EdTech, Enterprise Search, Codebase Analysis.
+    *   *Use when:* The client needs to process massive context (e.g., entire textbooks, full repos of code) at once.
+
+### The "Balanced/Production" Paid Stack (Best ROI)
+*   **Claude Sonnet 4.6 (Anthropic)**: 
+    *   *Best for:* Customer Support Agents, RAG Applications, E-commerce Assistants.
+    *   *Use when:* The client wants a reliable, smart, fast model for production without breaking the bank. (The default choice for most B2B agents).
+*   **Mistral Large 3 (Mistral)**: 
+    *   *Best for:* European Enterprises, GDPR-heavy Apps.
+    *   *Use when:* The client strictly requires a European provider for data sovereignty or compliance.
+*   **GPT-4o (OpenAI)**: 
+    *   *Best for:* Multimodal Apps (Vision + Text), Conversational AI.
+    *   *Use when:* The client needs one model that can look at images and talk (e.g., a photo-based tutor or a visual inspection tool).
+
+### The "High-Volume/Budget" Paid Stack (Low Cost, Fast)
+*   **Gemini 2.5 Flash (Google)**: 
+    *   *Best for:* High-Volume Chatbots, Real-time Translation, Game NPCs.
+    *   *Use when:* The client needs to process millions of requests cheaply and fast.
+*   **DeepSeek V3 (DeepSeek)**: 
+    *   *Best for:* Data Extraction, Sentiment Analysis, Cost-Sensitive Apps.
+    *   *Use when:* The client wants near-GPT-4 performance but is highly budget-constrained.
+*   **Mistral Medium 3.5 (Mistral)**: 
+    *   *Best for:* Mid-tier European Enterprise Apps.
+
+### The "Open-Weight & Privacy" Stack (Self-Hosted, High Privacy)
+*   **Llama 4 Scout/Maverick (Meta/Groq)**: 
+    *   *Best for:* Healthcare, Banking, Defense (HIPAA/SOC2 compliance).
+    *   *Use when:* The client CANNOT send data to OpenAI or Anthropic and MUST host the model inside their own AWS/Azure VPC.
+*   **DeepSeek R1 (DeepSeek)**: 
+    *   *Best for:* Financial Modeling, Local Reasoning Agents.
+    *   *Use when:* The client needs complex reasoning but refuses to use US-based cloud APIs.
+
+### The "Free/Prototype" Stack (Zero API Cost)
+*   **GroqCloud Free Tier (Groq)**: 
+    *   *Best for:* Hackathons, MVPs, Student Projects.
+    *   *Use when:* The client is a solo founder with zero budget who needs blazing-fast inference for a prototype.
+*   **OpenRouter Free Models**: 
+    *   *Best for:* Testing different models, Early-stage validation.
+
+---
+
+## 2. MULTIMODAL MODELS (Text + Image/Video)
+*   **Gemini 2.0 Flash (Google)**: 
+    *   *Best for:* Social Media Analytics, UI/UX Analysis.
+    *   *Use when:* The client needs to extract data from images/screenshots cheaply.
+*   **Qwen2.5-VL (Alibaba)**: 
+    *   *Best for:* Security Cameras, Local Document Processing.
+    *   *Use when:* The client wants to self-host a vision model for privacy reasons.
+
+---
+
+## 3. VIDEO GENERATION MODELS
+*   **Runway Gen-4/4.5**: 
+    *   *Best for:* High-End Marketing Ads, Film Pre-visualization.
+    *   *Use when:* The client wants the best-looking cinematic video and has a budget.
+*   **Google Veo 3.1**: 
+    *   *Best for:* YouTube Automation, UGC-style Ads.
+    *   *Use when:* The client needs video WITH native synchronized audio (talking characters).
+*   **Kling 3.0/4.0**: 
+    *   *Best for:* TikTok/Reels Factories, Bulk Ad Creatives.
+    *   *Use when:* The client is generating hundreds of videos a day and needs low cost per second.
+*   **LTX-2.5 (Open-Weight)**: 
+    *   *Best for:* Custom Video Platforms, Indie Game Studios.
+    *   *Use when:* The client wants to host their own video generation on their own GPUs.
+
+---
+
+## 4. VOICE & AUDIO MODELS
+*   **ElevenLabs**: 
+    *   *Best for:* Audiobooks, Premium Voice Assistants, Dubbing.
+    *   *Use when:* The client needs the most realistic, human-sounding voice with emotion.
+*   **OpenAI TTS**: 
+    *   *Best for:* Standard AI Agents, Accessibility Apps.
+    *   *Use when:* The client just needs reliable, natural text-to-speech without extreme pricing.
+*   **Kokoro-82M (Open-Weight)**: 
+    *   *Best for:* Local AI Agents, Edge Devices (Raspberry Pi).
+    *   *Use when:* The client needs a lightweight TTS that runs on a CPU with zero API costs.

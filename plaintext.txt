@@ -1,0 +1,6 @@
+planmodelai-hub/
+├── .env                 (Copy your existing .env file)
+├── requirements.txt     (See below)
+├── vault_agent.py       (Copy your existing vault_agent.py)
+├── pdf_generator.py     (Copy your existing pdf_generator.py from Product A)
+└── portal.py            (Complete Unified Executive Portal code below)
