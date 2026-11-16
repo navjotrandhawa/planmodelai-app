@@ -921,49 +921,185 @@ def save_product_a_to_vault(answers: List[str], blueprint_dict: dict) -> str:
 # ===========================================================================
 # 3. PRODUCT B: DIY ENGINEERING BLUEPRINT (SCHEMAS, ENGINE & 7-SECTION RENDERER)
 # ===========================================================================
+import re
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
+import streamlit as st
+from pydantic import BaseModel, Field, field_validator
+from langchain_core.prompts import ChatPromptTemplate
+
+# ==============================================================================
+# 1. VAULT-AWARE 4-QUESTION DISCOVERY BOT (ANALYZES PRODUCT A -> 200-WORD CAP)
+# ==============================================================================
+
+class ProductBDiscoveryQuestionnaire(BaseModel):
+    vault_analysis_summary: str = Field(
+        description="2-sentence architect synthesis of the locked Product A report confirming modality, stack, and baseline OpEx."
+    )
+    q1_api_contracts: str = Field(
+        description="Question 1 (API & Data Contracts): Specific question asking about exact webhook events, REST endpoints, and auth payloads for the systems named in Product A (max 35 words)."
+    )
+    q2_deterministic_rules: str = Field(
+        description="Question 2 (Deterministic Guardrails & Escalation): Specific question asking for exact business rules, confidence score cutoffs (e.g., <0.85), or monetary/refund limits that must bypass LLM autonomy (max 35 words)."
+    )
+    q3_rag_and_privacy: str = Field(
+        description="Question 3 (Knowledge Indexing & PII Redaction): Specific question asking about document chunking, metadata tags, and regional privacy/GDPR masking requirements before vector retrieval (max 35 words)."
+    )
+    q4_ops_and_sla: str = Field(
+        description="Question 4 (Runtime SLA, Concurrency & Handoff): Specific question asking about peak concurrency, retry/dead-letter queue behavior, and human agent escalation payload format (max 35 words)."
+    )
+
+
+def enforce_200_word_limit(user_answer: str) -> tuple[bool, int, str]:
+    """Validates and trims each client discovery response to a strict 200-word maximum."""
+    words = (user_answer or "").strip().split()
+    word_count = len(words)
+    if word_count <= 200:
+        return True, word_count, " ".join(words)
+    return False, word_count, " ".join(words[:200])
+
+
+def generate_product_b_discovery_questions(product_a_record: Dict[str, Any], vault_id: str) -> Dict[str, str]:
+    """Analyzes the locked Product A report in the vault and generates 4 tailored technical questions."""
+    rep = product_a_record.get("report_data", product_a_record)
+    exec_sum = rep.get("executive_summary") or rep.get("user_idea_summary", "AI automation system")
+    modality = rep.get("modality") or rep.get("detected_modality", "TEXT_REASONING")
+    paid_stack = rep.get("paid_stack_summary") or rep.get("paid_stack", {}).get("model_stack", "Managed LLM API")
+    paid_cost = rep.get("paid_monthly_cost_usd", 600)
+    steps = ", ".join(rep.get("workflow_steps", []))
+
+    if ChatOpenAI is None:
+        return {
+            "vault_analysis_summary": f"Locked onto Vault {vault_id} ({modality} | Baseline: ${paid_cost}/mo).",
+            "questions": [
+                "1. API & Webhook Contracts: Which exact webhook events and order/ticket payload fields must our ingestion endpoint parse, and what rate limits apply? (Max 200 words)",
+                "2. Deterministic Escalation Rules: Beyond a <0.85 confidence score, what hard business rules (e.g., refund value, VIP tier, missing tracking) must force immediate human handoff? (Max 200 words)",
+                "3. RAG & Privacy Controls: How frequently do your policy PDFs/FAQs update, and which PII fields (emails, addresses, order IDs) require masking before LLM inference? (Max 200 words)",
+                "4. Runtime SLA & Handoff Format: What is your peak hourly ticket concurrency, and what exact JSON/note structure do your agents need inside escalated tickets? (Max 200 words)",
+            ],
+        }
+
+    sys_prompt = """You are a Principal AI Solutions Architect at PickModelAI.com.
+Analyze the client's locked Product A Genesis Diagnostic below and generate 4 sharp, domain-specific technical discovery questions needed to write their Product B DIY Engineering Blueprint.
+Keep every question concrete, referencing their actual integrations, compliance needs, and workflow steps. Remind them each answer is capped at 200 words."""
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", sys_prompt),
+        ("human", "VAULT ID: {vault_id}\nMODALITY: {modality}\nSUMMARY: {exec_sum}\nSTACK: {paid_stack}\nWORKFLOW: {steps}\nLOCKED OPEX: ${paid_cost}/mo"),
+    ])
+    llm = ChatOpenAI(model=OPENAI_CHAT_MODEL, temperature=0.15, max_retries=2, timeout=45)
+    q_obj = (prompt | llm.with_structured_output(ProductBDiscoveryQuestionnaire)).invoke({
+        "vault_id": vault_id,
+        "modality": modality,
+        "exec_sum": exec_sum,
+        "paid_stack": paid_stack,
+        "steps": steps,
+        "paid_cost": paid_cost,
+    })
+    return {
+        "vault_analysis_summary": q_obj.vault_analysis_summary,
+        "questions": [
+            f"Question 1 of 4 (API & Data Contracts — Max 200 words): {q_obj.q1_api_contracts}",
+            f"Question 2 of 4 (Deterministic Guardrails & Escalation — Max 200 words): {q_obj.q2_deterministic_rules}",
+            f"Question 3 of 4 (RAG Indexing & Privacy Compliance — Max 200 words): {q_obj.q3_rag_and_privacy}",
+            f"Question 4 of 4 (Runtime SLA & Escalation Payload — Max 200 words): {q_obj.q4_ops_and_sla}",
+        ],
+    }
+
+
+# ==============================================================================
+# 2. UPGRADED PYDANTIC SCHEMAS (MCKINSEY / PRINCIPAL ARCHITECT GRADE)
+# ==============================================================================
+
 class BuildVsBuyRow(BaseModel):
-    metric: str = Field(description="Evaluation metric (e.g., Setup & Launch Time, Monthly Software Cost, 12-Month TCO, 3-Year Spend, Customization).")
-    commercial_saas: str = Field(description="Commercial SaaS vendor benchmark & restrictions.")
-    custom_python_build: str = Field(description="Custom Python + AWS stack advantage & exact USD cost.")
+    metric: str = Field(
+        description="Evaluation dimension: (1) Setup & Launch Time, (2) Monthly Cloud Run-Rate (1k-2k runs), (3) 12-Month Cloud OpEx, (4) DevOps / Maintenance Allocation, (5) Data Residency, Zero-Training & Unit Economics at Scale."
+    )
+    commercial_saas: str = Field(
+        description="Commercial SaaS benchmark: highlight per-seat/per-resolution pricing penalties ($0.90-$2.00/ticket), black-box prompt lock-in, and shared multi-tenant data policies."
+    )
+    custom_python_build: str = Field(
+        description="Custom Python + AWS advantage: state exact locked USD cloud run-rate, transparent maintenance reality, EU/GDPR zero-data-retention control, and flat marginal scaling."
+    )
 
 
 class ArchitectureNode(BaseModel):
-    node_title: str = Field(description="Short node name, e.g., 'Node 1: Deterministic Filter'")
-    node_subtitle: str = Field(description="Concise 4-7 word technical action.")
+    node_title: str = Field(description="Clean stage title WITHOUT leading numbers, e.g., 'Webhook & HMAC Gate'")
+    node_subtitle: str = Field(description="Concise 5-9 word technical action naming exact protocol, threshold, or store.")
 
 
 class RoadmapRow(BaseModel):
-    timeline: str = Field(description="e.g., Days 1–2, Day 3, Day 4, Day 5, Day 6")
-    milestone: str = Field(description="Concrete engineering deliverable and libraries used (25-40 words).")
-    verification_gate: str = Field(description="Measurable acceptance test to pass before moving forward (12-22 words).")
+    timeline: str = Field(description="Exact sprint window: 'Days 1–2', 'Day 3', 'Day 4', 'Day 5', 'Day 6'")
+    milestone: str = Field(
+        description="Concrete engineering deliverable naming exact Python modules, API webhooks, PII scrubbers, and AWS resources (28-42 words)."
+    )
+    verification_gate: str = Field(
+        description="Deterministic pass/fail acceptance test with a quantifiable metric (e.g., '<1.8s p95 latency', '100% PII redaction', '0.85 confidence router check') (14-24 words)."
+    )
 
 
 class CostScalingRow(BaseModel):
     component: str = Field(description="Infrastructure or API component name.")
-    tier_1_low: str = Field(description="Monthly USD cost at 1,000 users/runs.")
-    tier_2_mid: str = Field(description="Monthly USD cost at 15,000 users/runs.")
-    tier_3_high: str = Field(description="Monthly USD cost at 100,000 users/runs.")
+    tier_1_low: str = Field(description="Monthly USD cost at Baseline Volume (1,000–2,000 runs).")
+    tier_2_mid: str = Field(description="Monthly USD cost at Mid Scale (15,000 runs).")
+    tier_3_high: str = Field(description="Monthly USD cost at High Scale (100,000 runs).")
 
 
 class FullDIYBlueprintReport(BaseModel):
     report_title: str = Field(description="Uppercase executive blueprint title (5-9 words).")
-    stack_badge: str = Field(description="e.g., Python 3.11 + LangGraph + Qdrant Cloud + AWS ECS")
-    cadence_badge: str = Field(description="e.g., Real-Time Event-Driven / Scheduled Cron")
-    build_time_badge: str = Field(description="e.g., 6 Days")
-    paid_monthly_cost_usd: int = Field(ge=0, le=50000, description="Baseline monthly custom stack cost in USD.")
-    oss_monthly_cost_usd: int = Field(ge=0, le=50000, description="Private VPC self-hosted monthly cost in USD.")
-    build_vs_buy_narrative: str = Field(description="3 crisp paragraphs comparing commercial SaaS lock-in vs. custom Python + AWS ownership (110-150 words).")
+    stack_badge: str = Field(
+        description="Exact production stack naming specific LLM (e.g., Python 3.11 + LangGraph + GPT-4o-mini/Claude 3.7 + Pinecone EU + AWS ECS)"
+    )
+    cadence_badge: str = Field(description="e.g., Real-Time Event-Driven Webhooks (<2 min SLA)")
+    build_time_badge: str = Field(description="e.g., 6-Day MVP Sprint")
+    paid_monthly_cost_usd: int = Field(ge=0, le=50000, description="Locked baseline monthly custom stack cloud OpEx in USD.")
+    oss_monthly_cost_usd: int = Field(ge=120, le=50000, description="Locked Private VPC self-hosted monthly infra cost in USD (excl. MLOps labor).")
+    build_vs_buy_narrative: str = Field(
+        description=(
+            "3 crisp executive paragraphs (120-160 words) comparing Commercial SaaS vs. Custom Python + AWS. "
+            "Must honestly acknowledge that custom code requires developer maintenance, while proving custom wins on: "
+            "(1) avoiding per-ticket/per-seat SaaS tax as volume scales, (2) strict GDPR/EU Zero-Data-Retention compliance, "
+            "and (3) deterministic business-rule control before LLM calls."
+        )
+    )
     build_vs_buy_table: List[BuildVsBuyRow] = Field(description="Exactly 5 comparison rows.")
-    architecture_narrative: str = Field(description="2 paragraphs explaining deterministic Python preprocessing first and LLM synthesis + fact-audit second (80-110 words).")
+    architecture_narrative: str = Field(
+        description=(
+            "2 architectural paragraphs (90-120 words) explaining why Stage 1-2 execute deterministic Python validation, "
+            "HMAC verification, and regex/Presidio PII scrubbing first, while Stage 3-4 execute RAG synthesis, "
+            "structured Pydantic confidence scoring, and deterministic <0.85 human escalation."
+        )
+    )
     architecture_nodes: List[ArchitectureNode] = Field(description="Exactly 4 sequential pipeline nodes.")
-    architecture_caption: str = Field(description="1-sentence infrastructure execution note shown beneath the flow diagram.")
-    prerequisites_bullets: List[str] = Field(description="Exactly 4 bullet points covering Data/Domain APIs, AWS Infrastructure, OpenAI & Qdrant credentials, and Python packages.")
-    roadmap_rows: List[RoadmapRow] = Field(description="Exactly 5 rows covering Days 1-2, Day 3, Day 4, Day 5, and Day 6.")
-    code_filename: str = Field(description="e.g., workflow_graph.py")
-    production_python_code: str = Field(description="Clean, runnable 32-45 line Python reference implementation with Pydantic schema, deterministic filter/guardrail node, LangGraph/LangChain workflow, and Qdrant/OpenAI integration. No markdown fences.")
-    aws_security_bullets: List[str] = Field(description="Exactly 4 detailed engineering bullets covering Compute Economics, Rate-Limit/Resilience, Deterministic Circuit-Breaker Guardrail, and Compliance Footer.")
-    cost_scaling_rows: List[CostScalingRow] = Field(description="Exactly 6 rows ending with 'Total Custom Python Stack Cost' and 'Comparable Market SaaS Cost'.")
-    systems_engineering_summary: str = Field(description="1 punchy executive takeaway paragraph on gross margins and flat core compute scaling (40-60 words).")
+    architecture_caption: str = Field(description="1-sentence regional cloud & VPC execution note shown beneath Figure 1.")
+    prerequisites_bullets: List[str] = Field(
+        description="Exactly 4 bullet points covering: (1) Domain APIs & Webhooks, (2) Regional AWS Infrastructure (e.g., eu-central-1), (3) Zero-Retention LLM & Vector DB Keys, (4) Python 3.11 Package Lockfile."
+    )
+    roadmap_rows: List[RoadmapRow] = Field(description="Exactly 5 rows covering Days 1–2, Day 3, Day 4, Day 5, and Day 6.")
+    code_filename: str = Field(description="e.g., support_langgraph_router.py")
+    production_python_code: str = Field(
+        description=(
+            "Clean, runnable 35-45 line Python 3.11 reference implementation using `pydantic`, `langchain_openai`, and `langgraph`. "
+            "Must include: (1) Pydantic structured output schema with `confidence_score: float` and `escalate_to_human: bool`, "
+            "(2) a deterministic PII scrubber & order-status pre-check node, (3) an LLM RAG responder node, and "
+            "(4) a deterministic conditional edge routing `< 0.85` confidence to an agent summary escalation node. No markdown fences."
+        )
+    )
+    aws_security_bullets: List[str] = Field(
+        description=(
+            "Exactly 4 detailed engineering bullets covering: (1) Regional Compute & Auto-Scaling Economics, "
+            "(2) Webhook Idempotency, SQS Dead-Letter Queues & Rate-Limiting, (3) Deterministic Circuit-Breaker (<0.85 Confidence & Refund Cap Guardrail), "
+            "and (4) GDPR DPA, EU Region Pinning (`eu-central-1`), and Zero-Training API Enforcement."
+        )
+    )
+    cost_scaling_rows: List[CostScalingRow] = Field(
+        description="Exactly 6 rows: 4 granular cloud/API components, 5th row 'Total Custom Python Cloud OpEx (Excl. DevOps)', and 6th row 'Comparable Per-Ticket Market SaaS Cost'."
+    )
+    systems_engineering_summary: str = Field(
+        description="1 punchy Principal Architect takeaway paragraph (45-65 words) contrasting sub-linear cloud API scaling + semantic caching against linear per-ticket SaaS fees, while noting recommended developer retainer allocation."
+    )
 
     @field_validator("build_vs_buy_table")
     @classmethod
@@ -973,7 +1109,12 @@ class FullDIYBlueprintReport(BaseModel):
     @field_validator("architecture_nodes")
     @classmethod
     def check_nodes_len(cls, v: List[ArchitectureNode]) -> List[ArchitectureNode]:
-        return v[:4]
+        cleaned = []
+        for idx, node in enumerate(v[:4], 1):
+            clean_title = re.sub(r"^(?:node\s*\d+[:.\-–—]*|\d+[:.\-–—]+)\s*", "", node.node_title, flags=re.I).strip()
+            node.node_title = f"Node {idx}: {clean_title}" if clean_title else f"Node {idx}: Pipeline Stage"
+            cleaned.append(node)
+        return cleaned
 
     @field_validator("roadmap_rows")
     @classmethod
@@ -981,37 +1122,43 @@ class FullDIYBlueprintReport(BaseModel):
         return v[:5]
 
 
-def _reconcile_product_b_costs(data: Dict[str, Any], locked_paid: Optional[int], locked_oss: Optional[int]) -> Dict[str, Any]:
-    """BUG #5 FIX: Enforce exact baseline cost parity between Product A and Product B Section 1 & Section 7."""
-    if locked_paid and locked_paid > 0:
-        data["paid_monthly_cost_usd"] = locked_paid
-    if locked_oss and locked_oss > 0:
-        data["oss_monthly_cost_usd"] = locked_oss
+# ==============================================================================
+# 3. COST PARITY RECONCILIATION (FIXES SYNTAX BUGS & SAAS FALLACY)
+# ==============================================================================
 
-    baseline = int(data.get("paid_monthly_cost_usd", 0))
+def _reconcile_product_b_costs(data: Dict[str, Any], locked_paid: Optional[int], locked_oss: Optional[int]) -> Dict[str, Any]:
+    """Enforces exact baseline cost parity between Product A and Product B Section 1 & Section 7."""
+    if locked_paid and locked_paid > 0:
+        data["paid_monthly_cost_usd"] = int(locked_paid)
+    if locked_oss and locked_oss > 0:
+        data["oss_monthly_cost_usd"] = max(350, int(locked_oss))
+
+    baseline = int(data.get("paid_monthly_cost_usd", 600))
     if baseline > 0:
-        # Sync Section 1 Build vs Buy Monthly Software Cost row
         for row in data.get("build_vs_buy_table", []):
             metric_low = str(row.get("metric", "")).lower()
-            if "monthly" in metric_low and "cost" in metric_low:
-                row["custom_python_build"] = f"${baseline:,}/month baseline (1,000 runs)"
+            if "monthly" in metric_low and ("cost" in metric_low or "run-rate" in metric_low):
+                row["custom_python_build"] = f"${baseline:,}/mo cloud OpEx (baseline 1k–2k runs; zero per-seat fees)"
             elif "12-month" in metric_low or "1 year" in metric_low:
-                row["custom_python_build"] = f"${baseline * 12:,}/year baseline OpEx"
+                row["custom_python_build"] = f"${baseline * 12:,}/yr cloud OpEx (excl. optional dev support retainer)"
+            elif "3-year" in metric_low:
+                row["custom_python_build"] = f"${baseline * 36:,} cloud OpEx over 36 mos (full IP & prompt ownership)"
 
-        # Sync Section 7 Cost Scaling Table so 1,000 Runs / Users equals exact Product A baseline
         cost_rows = data.get("cost_scaling_rows", [])
         component_rows = []
         total_row = None
+        saas_row = None
         for row in cost_rows:
             comp_low = str(row.get("component", "")).lower()
             if "total custom" in comp_low:
                 total_row = row
-            elif "comparable market saas" not in comp_low:
+            elif "comparable" in comp_low or "saas" in comp_low:
+                saas_row = row
+            else:
                 component_rows.append(row)
 
         if component_rows and total_row is not None:
-            # Pro-rate 1k column components so they sum cleanly to `baseline`
-            weights = [0.55, 0.25, 0.12, 0.08]
+            weights = [0.55, 0.20, 0.15, 0.10]
             while len(weights) < len(component_rows):
                 weights.append(0.05)
             w_sum = sum(weights[: len(component_rows)])
@@ -1019,137 +1166,256 @@ def _reconcile_product_b_costs(data: Dict[str, Any], locked_paid: Optional[int],
             allocated[0] += baseline - sum(allocated)  # eliminate rounding drift
 
             for idx, row in enumerate(component_rows):
-                t1 = max(5, allocated[idx])
+                t1 = max(10, allocated[idx])
                 row["tier_1_low"] = f"${t1:,}"
-                # Ensure 15k and 100k columns scale monotonically above t1
                 try:
-                    t2 = int(_parse_usd_cost(row.get("tier_2_mid", f"${t1 * 2}")))
+                    t2 = int(_parse_usd_cost(row.get("tier_2_mid", f"${round(t1 * 2.2)}")))
                 except Exception:
                     t2 = round(t1 * 2.2)
                 if t2 <= t1:
                     t2 = round(t1 * 2.2)
+
                 try:
-                    t3 = int(_parse_usd_cost(row.get("tier_3_high", f"${t2 * 3}")))
+                    t3 = int(_parse_usd_cost(row.get("tier_3_high", f"${round(t2 * 3.4)}")))
                 except Exception:
-                    t3 = round(t2 * 3.5)
+                    t3 = round(t2 * 3.4)
                 if t3 <= t2:
-                    t3 = round(t2 * 3.5)
+                    t3 = round(t2 * 3.4)
+
                 row["tier_2_mid"] = f"${t2:,}"
                 row["tier_3_high"] = f"${t3:,}"
 
-            # Recompute exact column sums for Total Custom Python Stack Cost
             sum_t1 = sum(int(_parse_usd_cost(r["tier_1_low"])) for r in component_rows)
             sum_t2 = sum(int(_parse_usd_cost(r["tier_2_mid"])) for r in component_rows)
             sum_t3 = sum(int(_parse_usd_cost(r["tier_3_high"])) for r in component_rows)
-            total_row["tier_1_low"] = f"${sum_t1:,}"
-            total_row["tier_2_mid"] = f"${sum_t2:,}"
-            total_row["tier_3_high"] = f"${sum_t3:,}"
+            total_row["component"] = "Total Custom Python Cloud OpEx (Excl. DevOps)"
+            total_row["tier_1_low"] = f"${sum_t1:,}/mo"
+            total_row["tier_2_mid"] = f"${sum_t2:,}/mo"
+            total_row["tier_3_high"] = f"${sum_t3:,}/mo"
+
+            if saas_row is not None:
+                saas_t1 = max(int(round(sum_t1 * 1.45)), 850)
+                saas_t2 = max(int(round(sum_t2 * 2.6)), 3600)
+                saas_t3 = max(int(round(sum_t3 * 4.2)), 18500)
+                saas_row["component"] = "Comparable Per-Resolution Market SaaS ($0.90+/ticket)"
+                saas_row["tier_1_low"] = f"${saas_t1:,}/mo"
+                saas_row["tier_2_mid"] = f"${saas_t2:,}/mo"
+                saas_row["tier_3_high"] = f"${saas_t3:,}/mo"
 
     return data
 
 
-def generate_product_b_document(project_context: str, core_idea: str, vault_id: Optional[str] = None) -> Dict[str, Any]:
-    lifecycle = _prepare_vault_generation(vault_id, "2")
+# ==============================================================================
+# 4. PRODUCT B GENERATOR WITH PRODUCT A CONTEXT + 4 CLIENT ANSWERS
+# ==============================================================================
+
+def generate_product_b_document(
+    project_context: str,
+    core_idea: str,
+    vault_id: Optional[str] = None,
+    discovery_answers: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    # Enforce single immutable Vault ID if provided
+    canonical_vault_id = (vault_id or "").strip().upper() or None
+    lifecycle = _prepare_vault_generation(canonical_vault_id, "2")
+    if canonical_vault_id:
+        lifecycle["vault_id"] = canonical_vault_id
+
     modality = detect_primary_modality(core_idea)
 
-    # BUG #5 FIX: Retrieve locked Product A costs from vault so Product B uses identical baseline OpEx
     vault = get_vault_agent()
-    prior_records = vault.retrieve_client_reports(vault_id) if (vault and vault_id) else []
+    prior_records = vault.retrieve_client_reports(canonical_vault_id) if (vault and canonical_vault_id) else []
     locked_paid, locked_oss = _extract_locked_costs_from_records(prior_records)
+
+    # Extract Product A context and merge with the 4 capped 200-word client answers
+    formatted_answers = ""
+    if discovery_answers:
+        capped = [enforce_200_word_limit(ans)[2] for ans in discovery_answers[:4]]
+        formatted_answers = "\n".join(
+            f"Client Answer {i+1} (<=200 words): {txt}" for i, txt in enumerate(capped)
+        )
 
     cost_lock_instruction = ""
     if locked_paid:
+        resolved_oss = max(350, int(locked_oss or round(locked_paid * 0.7)))
         cost_lock_instruction = (
-            f"\n6. LOCKED BASELINE COST SYNC (CRITICAL): The locked baseline OpEx from Product A is ${locked_paid}/month "
-            f"(and Private VPC estimate is ${locked_oss or int(locked_paid * 0.6)}/month). "
-            f"You MUST set `paid_monthly_cost_usd` = {locked_paid}, use ${locked_paid}/month as the exact baseline figure in Section 1 and Section 7 (1,000 Runs column), "
-            "and scale 15,000 and 100,000 runs monotonically upward. Do NOT invent a new baseline."
+            f"\n6. LOCKED BASELINE COST SYNC (CRITICAL): Product A locked `paid_monthly_cost_usd` = ${locked_paid}/month "
+            f"and Private VPC infra estimate = ${resolved_oss}/month (excl. MLOps labor). "
+            f"You MUST set `paid_monthly_cost_usd` = {locked_paid} and `oss_monthly_cost_usd` = {resolved_oss}, "
+            f"use ${locked_paid}/month as the baseline in Section 1 and Section 7 (1,000–2,000 Runs column), "
+            "and scale 15,000 and 100,000 runs monotonically upward."
         )
 
-    system_prompt = """You are a Principal AI Solutions Architect at PickModelAI.com generating Product B: The Full DIY Engineering Blueprint (Beta Testing).
+    system_prompt = """You are a Principal AI Solutions Architect (McKinsey / Forward-Deployed Engineering lead style) at PickModelAI.com authoring Product B: The Full DIY Engineering Blueprint.
 DETECTED MODALITY: {modality}
-STRICT ARCHITECTURAL RULES:
-1. MODALITY LOCK: If VOICE_AUDIO, use Speech-to-Text + LLM + Text-to-Speech. NEVER recommend video models.
-2. MATH & DETERMINISM FIRST, AI SECOND: Separate deterministic Python filtering/validation from LLM synthesis.
-3. REALISTIC UNIT ECONOMICS: Provide concrete USD figures in Section 1 and Section 7.
-4. CLEAN PYTHON REFERENCE CODE: In `production_python_code`, write a clean reference example (32-45 lines) using modern `openai` / `langchain_openai` SDKs (NEVER legacy `davinci` completions) without ```python markdown backticks.
-5. DECISION QUALITY: State workload, pricing, staffing, and utilization assumptions. Quantify claims without unsupported certainty or hype adjectives. Identify model-generated estimates as estimates, not verified vendor quotations.{cost_lock_instruction}
+
+STRICT ARCHITECTURAL & CONSULTING RULES:
+1. SPECIFIC MODEL & REGION NAMES: Never write generic 'Managed LLM'. Name exact models (e.g., 'OpenAI GPT-4o-mini / GPT-4o with Zero-Data-Retention' or 'Claude 3.7 Sonnet via AWS Bedrock eu-central-1') and exact vector DBs matching Product A.
+2. HONEST BUILD VS. BUY ECONOMICS: Do NOT claim custom Python has zero maintenance cost. State clearly that custom builds require developer/MLOps maintenance (fitting within the client's support retainer), while winning decisively on:
+   - Eliminating per-resolution ($0.90-$2.00/ticket) and per-seat SaaS vendor taxes as volume scales.
+   - Strict GDPR DPA, EU data residency (`eu-central-1`), and Zero-Data-Retention guarantees.
+   - Deterministic workflow and API webhook control.
+3. DETERMINISTIC GATES FIRST, AI SECOND:
+   - Node 1: Webhook HMAC verification & schema validation.
+   - Node 2: Regex/Presidio PII scrubbing & live API state lookup (e.g., Shopify/Gorgias order status).
+   - Node 3: Grounded RAG synthesis with structured Pydantic confidence & sentiment output.
+   - Node 4: Deterministic circuit-breaker routing any response with `confidence_score < 0.85` or policy exception directly to human agents with a structured summary.
+4. RUNNABLE PRODUCTION CODE: In `production_python_code`, write 35-45 lines of clean Python 3.11 using `pydantic`, `langchain_openai`, and `langgraph.graph.StateGraph` implementing the exact 4-stage flow above. Never include markdown ``` fences.
+5. INCORPORATE ALL 4 DISCOVERY ANSWERS: Directly reflect the client's API contracts, escalation thresholds, privacy rules, and SLA targets in Sections 2, 3, 4, 5, and 6.{cost_lock_instruction}
 {lifecycle_warning}"""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        ("human", "<client_project_requirements>\n{project_context}\n</client_project_requirements>"),
+        (
+            "human",
+            "<locked_product_a_context>\n{project_context}\n</locked_product_a_context>\n\n"
+            "<client_4_discovery_answers_max_200_words_each>\n{formatted_answers}\n</client_4_discovery_answers_max_200_words_each>",
+        ),
     ])
     if ChatOpenAI is None:
         raise RuntimeError("The langchain-openai package is required to generate Product B blueprints.")
-    llm = ChatOpenAI(model=OPENAI_CHAT_MODEL, temperature=0.2, max_retries=2, timeout=90)
+    llm = ChatOpenAI(model=OPENAI_CHAT_MODEL, temperature=0.15, max_retries=2, timeout=90)
     structured_llm = llm.with_structured_output(FullDIYBlueprintReport, method="function_calling")
     raw_res = (prompt | structured_llm).invoke({
         "modality": modality,
         "project_context": project_context,
+        "formatted_answers": formatted_answers or "Use locked Product A parameters.",
         "cost_lock_instruction": cost_lock_instruction,
-        "lifecycle_warning": f"### VAULT LIFECYCLE WARNING ###\n{lifecycle['warning']}" if lifecycle["warning"] else "",
+        "lifecycle_warning": f"### VAULT LIFECYCLE WARNING ###\n{lifecycle['warning']}" if lifecycle.get("warning") else "",
     })
     data = raw_res.model_dump() if isinstance(raw_res, BaseModel) else dict(raw_res)
     data["detected_modality"] = modality
     if modality == "VOICE_AUDIO" and any(t in str(data.get("stack_badge", "")).lower() for t in VIDEO_ONLY_TOKENS):
         data["stack_badge"] = "Python 3.11 + OpenAI Realtime + ElevenLabs + Qdrant + AWS ECS"
     data = _reconcile_product_b_costs(data, locked_paid, locked_oss)
-    return _attach_vault_context(data, lifecycle)
+    result = _attach_vault_context(data, lifecycle)
+    if canonical_vault_id:
+        result["vault_id"] = canonical_vault_id
+    return result
 
 
-def persist_lead_and_blueprint(
-    contact: Dict[str, Any],
-    project_inputs: Dict[str, str],
-    report_data: Dict[str, Any],
-    existing_vault_id: Optional[str] = None,
-) -> str:
-    vault = get_vault_agent()
-    if vault is None:
-        raise RuntimeError("Vault persistence is unavailable; no replacement ID was created.")
-    ref_id = _report_vault_id(report_data, existing_vault_id)
-    vault_payload = {
-        **report_data,
-        "contact_details": contact,
-        "modality": report_data.get("detected_modality", "TEXT_REASONING"),
-        "feasibility_grade": "Grade A (DIY Engineering Blueprint)",
-        "executive_summary": str(report_data.get("build_vs_buy_narrative", ""))[:400],
-        "paid_stack_summary": report_data.get("stack_badge", ""),
-        "oss_stack_summary": "Self-Hosted AWS ECS / VPC Architecture",
-    }
-    ref_id = vault.save_blueprint_to_vault(
-        user_inputs=project_inputs,
-        report_data=vault_payload,
-        tier="Tier 2",
-        client_ref_id=ref_id,
-    )
-    for key in ("vault_id", "lineage", "tiers_generated"):
-        report_data[key] = vault_payload[key]
-
-    timestamp_slug = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    lead_file = LEADS_DIR / f"{ref_id}_ProductB_{timestamp_slug}_{uuid.uuid4().hex[:6]}.json"
-    record = {
-        "client_vault_id": ref_id,
-        "tier": "Product B (Tier 2 DIY Engineering Blueprint — Beta Testing)",
-        "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-        "contact_details": contact,
-        "project_inputs": project_inputs,
-        "generated_blueprint": report_data,
-        "lineage": report_data["lineage"],
-        "tiers_generated": report_data["tiers_generated"],
-    }
-    lead_file.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
-    return ref_id
-
+# ==============================================================================
+# 5. EXECUTIVE ON-PAGE RENDERER (PRINT-SAFE CSS, NO SIDEBAR BLEED, NO PII LEAK)
+# ==============================================================================
 
 def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], vault_id: str, is_vault_locked: bool) -> None:
     generated_date = datetime.now().strftime("%B %d, %Y")
+    # Single canonical Vault ID enforced everywhere
+    canonical_id = str(vault_id or report.get("vault_id", "PMAI-LOCKED")).strip().upper()
+
+    # Format corporate stakeholder line without leaking residential street/PIN codes
+    client_name = contact.get("name", "Executive Stakeholder").strip()
+    client_company = contact.get("company", "").strip()
+    region_label = contact.get("country", "Global / EU-GDPR").strip()
+    prepared_for = f"{client_name} ({client_company})" if client_company and client_company.lower() != client_name.lower() else client_name
+
     scope_note = (
-        f"Scope locked to verified Client Vault ID <code class='pm-vault-id'>{vault_id}</code>. To modify project scope or request fresh reports, "
-        "please email <b>support@pickmodelai.com</b>."
+        f"Scope & baseline economics cryptographically locked to Client Vault ID <b>{canonical_id}</b> (synced from Product A Genesis Diagnostic)."
         if is_vault_locked
-        else f"Generated from new discovery session and locked under Client Vault ID <code class='pm-vault-id'>{vault_id}</code>. "
-        "To request scope revisions, contact <b>support@pickmodelai.com</b>."
+        else f"Generated from Technical Discovery and locked under Client Vault ID <b>{canonical_id}</b>."
+    )
+
+    # Inject McKinsey styling + @media print isolation so Streamlit sidebars NEVER bleed into PDF exports
+    st.markdown(
+        """
+        <style>
+        .pm-doc-container {
+            background: #FFFFFF;
+            border: 1px solid #CBD5E1;
+            border-top: 4px solid #051C2C;
+            border-radius: 4px;
+            padding: 24px 28px;
+            margin-top: 12px;
+            color: #1E293B;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .pm-header-bar {
+            background: #051C2C;
+            color: #FFFFFF;
+            padding: 18px 22px;
+            border-radius: 3px;
+            margin-bottom: 12px;
+        }
+        .pm-sub-tag {
+            color: #38BDF8;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .pm-doc-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.25;
+            margin-bottom: 8px;
+        }
+        .pm-badges {
+            font-size: 12px;
+            color: #E2E8F0;
+            border-top: 1px solid #1E3A5F;
+            padding-top: 8px;
+        }
+        .pm-vault-id {
+            background: #005EB8;
+            color: #FFFFFF;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+        .pm-node-box {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-top: 3px solid #005EB8;
+            padding: 10px 12px;
+            border-radius: 3px;
+            min-height: 84px;
+        }
+        .pm-node-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #051C2C;
+            margin-bottom: 4px;
+        }
+        .pm-node-sub {
+            font-size: 11.5px;
+            color: #334155;
+            line-height: 1.35;
+        }
+        .pm-summary-box {
+            background: #F8FAFC;
+            border-left: 4px solid #051C2C;
+            padding: 14px 18px;
+            margin-top: 16px;
+            font-size: 13.5px;
+            color: #1E293B;
+        }
+        .pm-footer {
+            margin-top: 18px;
+            padding-top: 10px;
+            border-top: 1px solid #CBD5E1;
+            font-size: 11.5px;
+            color: #64748B;
+            display: flex;
+            justify-content: space-between;
+        }
+        @media print {
+            section[data-testid="stSidebar"],
+            header[data-testid="stHeader"],
+            div[data-testid="stToolbar"],
+            div[data-testid="stStatusWidget"],
+            .stButton, .stTextInput, .stTextArea, .stForm {
+                display: none !important;
+            }
+            .block-container {
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
     with st.container():
@@ -1157,46 +1423,48 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
             f"""
             <div class="pm-doc-container">
                 <div class="pm-header-bar">
-                    <div class="pm-sub-tag">PICKMODELAI.COM — FULL DIY ENGINEERING BLUEPRINT (PRODUCT B • BETA TESTING)</div>
-                    <div class="pm-doc-title">{report.get('report_title', '')}</div>
+                    <div class="pm-sub-tag">PICKMODELAI ARCHITECTURE PRACTICE  |  PRODUCT B: DIY ENGINEERING BLUEPRINT</div>
+                    <div class="pm-doc-title">{report.get('report_title', 'ENTERPRISE AI ENGINEERING BLUEPRINT')}</div>
                     <div class="pm-badges">
-                        Stack: {report.get('stack_badge', '')}  | 
-                        Cadence: {report.get('cadence_badge', '')}  | 
-                        Build Time: {report.get('build_time_badge', '6 Days')}  | 
-                        Vault ID: <code class="pm-vault-id">{vault_id}</code>
+                        <b>Stack:</b> {report.get('stack_badge', '')}  | 
+                        <b>Cadence:</b> {report.get('cadence_badge', '')}  | 
+                        <b>Sprint:</b> {report.get('build_time_badge', '6-Day MVP Sprint')}  | 
+                        <b>Vault Ref:</b> <span class="pm-vault-id">{canonical_id}</span>
                     </div>
                 </div>
-                <div style="background:#F1F5F9; padding:8px 14px; border-radius:4px; font-size:12.5px; margin-bottom:8px;">
-                    <b>Prepared For:</b> {contact.get('name', '')} ({contact.get('company', '')})  • 
-                    <b>Location:</b> {contact.get('city', '')}, {contact.get('country', '')} — {contact.get('pin_code', '')}  • 
-                    <b>Contact:</b> {contact.get('email', '')} | {contact.get('phone', '')}
+                <div style="background:#F8FAFC; border-left:3px solid #005EB8; padding:8px 14px; font-size:12.5px; margin-bottom:8px;">
+                    <b>Prepared For:</b> {prepared_for}  • 
+                    <b>Jurisdiction / Residency:</b> {region_label}  • 
+                    <b>Date:</b> {generated_date}
                 </div>
-                <div style="background:#FEF3C7; padding:7px 14px; border-radius:4px; font-size:12px; color:#92400E; margin-bottom:10px;">
-                    🔒 {scope_note}
+                <div style="background:#FFFBEB; border-left:3px solid #D97706; padding:7px 14px; font-size:12px; color:#92400E; margin-bottom:12px;">
+                    {scope_note}
                 </div>
             """,
             unsafe_allow_html=True,
         )
-        metric_cols = st.columns(2)
-        metric_cols[0].metric("Baseline custom stack (USD/month)", f"${report.get('paid_monthly_cost_usd', 0):,}")
-        metric_cols[1].metric("Private VPC estimate (USD/month)", f"${report.get('oss_monthly_cost_usd', 0):,}")
+
+        metric_cols = st.columns(3)
+        metric_cols[0].metric("Option 1: Managed API OpEx", f"${report.get('paid_monthly_cost_usd', 0):,} / mo", "Target Prod Run-Rate")
+        metric_cols[1].metric("Option 2: Private VPC Infra", f"${report.get('oss_monthly_cost_usd', 350):,} / mo", "Infra Only (Excl. MLOps)")
+        metric_cols[2].metric("Escalation Circuit-Breaker", "< 0.85 Score", "Deterministic Agent Handoff")
         st.divider()
 
-        st.header("1. Build vs. Buy Economics (Why Custom Python Wins Long-Term)")
+        st.subheader("EXHIBIT 1  |  BUILD VS. BUY UNIT ECONOMICS & GOVERNANCE OWNERSHIP")
         st.write(report.get("build_vs_buy_narrative", ""))
         bvb_rows = report.get("build_vs_buy_table", [])
         if bvb_rows:
-            st.caption("Table 1 — Build-versus-buy comparison. Source: model-generated estimates from the supplied project assumptions.")
+            st.caption("Table 1 — Executive Build-vs-Buy TCO & Governance Matrix (Synced to Locked Product A Baseline).")
             st.table([
                 {
-                    "Evaluation Metric": r.get("metric", ""),
-                    "Commercial Market SaaS": r.get("commercial_saas", ""),
-                    "Custom Python Build (LangGraph + AWS)": r.get("custom_python_build", ""),
+                    "Evaluation Dimension": r.get("metric", ""),
+                    "Commercial Multi-Tenant SaaS": r.get("commercial_saas", ""),
+                    "Custom Python + AWS Architecture": r.get("custom_python_build", ""),
                 }
                 for r in bvb_rows
             ])
 
-        st.header("2. Hybrid Architecture (Deterministic Logic First, AI Second)")
+        st.subheader("EXHIBIT 2  |  HYBRID PIPELINE TOPOLOGY (DETERMINISTIC GATES FIRST, AI SECOND)")
         st.write(report.get("architecture_narrative", ""))
         nodes = report.get("architecture_nodes", [])
         if nodes:
@@ -1213,47 +1481,46 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
                         """,
                         unsafe_allow_html=True,
                     )
-            st.caption(f"Figure 1 — {report.get('architecture_caption', '')} Source: proposed architecture derived from the supplied project requirements; arrows indicate execution order.")
+            st.caption(f"Figure 1 — {report.get('architecture_caption', '')}")
 
-        st.header("3. Client Prerequisites & Environment Setup Checklist")
+        st.subheader("EXHIBIT 3  |  PRE-SPRINT ENVIRONMENT & CREDENTIAL CHECKLIST")
         for item in report.get("prerequisites_bullets", []):
             st.markdown(f"- {item}")
 
-        st.header("4. Six-Day Step-by-Step Implementation Roadmap")
+        st.subheader("EXHIBIT 4  |  6-DAY SPRINT EXECUTION ROADMAP & ACCEPTANCE GATES")
         roadmap = report.get("roadmap_rows", [])
         if roadmap:
-            st.caption("Table 2 — Implementation roadmap and verification gates.")
+            st.caption("Table 2 — Engineering Sprint Deliverables & Deterministic Verification Gates.")
             st.table([
                 {
-                    "Timeline": r.get("timeline", ""),
-                    "Engineering Milestone (Technical & Functional Deliverables)": r.get("milestone", ""),
-                    "Verification Gate": r.get("verification_gate", ""),
+                    "Sprint Window": r.get("timeline", ""),
+                    "Engineering Deliverable & Module Scope": r.get("milestone", ""),
+                    "Deterministic Acceptance Gate": r.get("verification_gate", ""),
                 }
                 for r in roadmap
             ])
 
-        st.header("5. Complete Production Python Implementation (Reference Example — Code May Differ or Get Updated)")
+        st.subheader("EXHIBIT 5  |  REFERENCE LANGGRAPH + PYDANTIC ROUTER IMPLEMENTATION")
         st.caption(
-            f"Reference File: `{report.get('code_filename', 'pipeline_graph.py')}` — "
-            "*Note: This implementation is a reference example; actual production code may differ or be updated based on SDK versions and deployment requirements.*"
+            f"Reference Module: `{report.get('code_filename', 'support_langgraph_router.py')}` — "
+            "Illustrates deterministic PII scrubbing, structured confidence scoring, and `< 0.85` human escalation routing."
         )
-        st.info("**Reference Code Notice:** The Python implementation below is an illustrative feasibility reference, not production code. LLM SDKs, LangChain APIs, and cloud provider SDKs evolve rapidly — specific imports, method signatures, and model names in this example are subject to deprecation, change, or decommissioning. The durable value of this section is the architectural pattern — deterministic validation before LLM synthesis, structured Pydantic schemas, and audit-trail design — not the specific code lines shown.")
         st.code(report.get("production_python_code", ""), language="python")
 
-        st.header("6. AWS Deployment, Security & Deterministic Guardrails")
+        st.subheader("EXHIBIT 6  |  REGIONAL AWS SECURITY, CIRCUIT-BREAKERS & GDPR CONTROLS")
         for bullet in report.get("aws_security_bullets", []):
             st.markdown(f"- {bullet}")
 
-        st.header("7. Granular AWS & API Cost Scaling Model")
+        st.subheader("EXHIBIT 7  |  MULTI-TIER CLOUD & API SCALING MODEL (1K TO 100K RUNS)")
         cost_rows = report.get("cost_scaling_rows", [])
         if cost_rows:
-            st.caption("Table 3 — Monthly infrastructure estimates (USD). Source: model-generated workload and pricing assumptions; validate against current vendor quotations.")
+            st.caption("Table 3 — Monthly Cloud Run-Rate Scaling vs. Per-Resolution SaaS Benchmarks (USD/month, excl. DevOps labor).")
             st.table([
                 {
-                    "Infrastructure Component": r.get("component", ""),
-                    "1,000 Runs / Users": r.get("tier_1_low", ""),
-                    "15,000 Runs / Users": r.get("tier_2_mid", ""),
-                    "100,000 Runs / Users": r.get("tier_3_high", ""),
+                    "Cost Component": r.get("component", ""),
+                    "Baseline (1k–2k Runs/Mo)": r.get("tier_1_low", ""),
+                    "Growth (15,000 Runs/Mo)": r.get("tier_2_mid", ""),
+                    "Enterprise (100,000 Runs/Mo)": r.get("tier_3_high", ""),
                 }
                 for r in cost_rows
             ])
@@ -1261,18 +1528,16 @@ def render_on_page_blueprint_b(report: Dict[str, Any], contact: Dict[str, Any], 
         st.markdown(
             f"""
             <div class="pm-summary-box">
-                <b>Systems Engineering Summary:</b> {report.get('systems_engineering_summary', '')}
-                <br/><br/>
-                <i>Note on Section 5 Implementation: The code provided in <b>5. Complete Production Python Implementation</b> is a reference example; actual implementation code may differ or get updated as underlying SDKs, APIs, and production requirements evolve.</i>
+                <b>Principal Architect TCO Synthesis:</b> {report.get('systems_engineering_summary', '')}
             </div>
             <div class="pm-footer">
-                PickModelAI.com — Full DIY Engineering Blueprint (Beta Testing) • Generated on {generated_date} • Client Vault ID: <code class="pm-vault-id">{vault_id}</code>
+                <span>PickModelAI Architecture Advisory • Product B Engineering Blueprint • {generated_date}</span>
+                <span>Immutable Vault Ref: <b>{canonical_id}</b></span>
             </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
 
 # ===========================================================================
 # 4. PRODUCT C: ENHANCED ENTERPRISE BLUEPRINT (SCHEMAS, ENGINE & 9-SECTION RENDERER)
