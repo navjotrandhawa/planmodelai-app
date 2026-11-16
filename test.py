@@ -625,21 +625,53 @@ def validate_regional_contact(
 # ===========================================================================
 # 2. PRODUCT A: GENESIS ARCHITECTURE DIAGNOSTIC (SCHEMAS & ENGINE)
 # ===========================================================================
+import re
+from typing import List, Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
+from langchain_core.prompts import ChatPromptTemplate
+
 VECTOR_DB_LITERAL = Literal[
-    "Pinecone Serverless",
+    "Pinecone Serverless (EU/US)",
     "ChromaDB",
     "PGVector (AWS RDS)",
-    "Qdrant Cloud",
+    "Qdrant Cloud (EU/US)",
 ]
 
 
 class PaidStackOption(BaseModel):
-    model_stack: str = Field(description="Complete commercial cloud model stack matching the exact modality.")
-    vector_db: VECTOR_DB_LITERAL = Field(description="Recommended managed vector database.")
-    why_this_stack: str = Field(description="Specific 1-sentence architectural reason why this stack fits their latency, modality, and budget (max 35 words).")
-    estimated_monthly_cost: str = Field(description="Exact USD breakdown, e.g., '$450/month total ($400/mo API usage + $50/mo Pinecone storage)'.")
-    monthly_cost_number_usd: int = Field(ge=1, le=50000, description="Total monthly cost integer in USD.")
-    scaling_path: str = Field(description="Concrete 1-sentence scaling optimization (max 35 words).")
+    model_stack: str = Field(
+        description=(
+            "Complete commercial cloud model stack matching the exact modality. "
+            "Must specify enterprise/zero-data-retention API endpoints and regional routing "
+            "(e.g., EU endpoints for GDPR) when privacy constraints exist."
+        )
+    )
+    vector_db: VECTOR_DB_LITERAL = Field(
+        description="Recommended managed vector database aligned with data residency requirements."
+    )
+    why_this_stack: str = Field(
+        description=(
+            "Specific 1-2 sentence architectural justification covering latency, team size fit "
+            "(zero MLOps overhead), and zero-training data privacy compliance (max 45 words)."
+        )
+    )
+    estimated_monthly_cost: str = Field(
+        description=(
+            "Exact USD breakdown distinguishing Prototype phase vs Production run-rate, e.g., "
+            "'Prototype: ~$180/mo | Production: $600/mo total ($500/mo API usage + $100/mo vector DB)'."
+        )
+    )
+    monthly_cost_number_usd: int = Field(
+        ge=1,
+        le=50000,
+        description="Target production monthly run-rate cost integer in USD.",
+    )
+    scaling_path: str = Field(
+        description=(
+            "Concrete 1-sentence scaling and cost optimization strategy, such as semantic caching, "
+            "prompt routing to smaller models, or batching (max 35 words)."
+        )
+    )
 
     @field_validator("model_stack", "why_this_stack", "scaling_path", "estimated_monthly_cost")
     @classmethod
@@ -648,12 +680,38 @@ class PaidStackOption(BaseModel):
 
 
 class OpenSourceStackOption(BaseModel):
-    model_stack: str = Field(description="Complete self-hosted open-weight stack on AWS GPU matching the exact modality.")
-    vector_db: VECTOR_DB_LITERAL = Field(description="Recommended self-hosted vector database.")
-    why_this_stack: str = Field(description="Specific 1-sentence reason why self-hosting fits their privacy, latency, or margin needs (max 35 words).")
-    estimated_monthly_cost: str = Field(description="Exact USD breakdown including AWS GPU hosting (minimum $120/mo).")
-    monthly_cost_number_usd: int = Field(ge=120, le=50000, description="Total monthly AWS hosting cost integer in USD (minimum 120).")
-    scaling_path: str = Field(description="Concrete 1-sentence GPU scaling tip (max 35 words).")
+    model_stack: str = Field(
+        description=(
+            "Complete self-hosted open-weight stack on AWS GPU (e.g., vLLM/TGI on g5.xlarge/g5.2xlarge) "
+            "matching the exact modality and target AWS region (e.g., eu-central-1)."
+        )
+    )
+    vector_db: VECTOR_DB_LITERAL = Field(
+        description="Recommended self-hosted or VPC-isolated vector database."
+    )
+    why_this_stack: str = Field(
+        description=(
+            "Specific 1-2 sentence trade-off analysis: explain VPC data isolation benefits vs. "
+            "the hidden DevOps/MLOps engineering overhead required to maintain self-hosted GPUs (max 45 words)."
+        )
+    )
+    estimated_monthly_cost: str = Field(
+        description=(
+            "Exact USD infrastructure breakdown (minimum $350/mo for 24/7 AWS GPU + vector DB) "
+            "plus an explicit note that DevOps/MLOps maintenance labor is excluded."
+        )
+    )
+    monthly_cost_number_usd: int = Field(
+        ge=350,
+        le=50000,
+        description="Total monthly AWS infrastructure cost integer in USD (minimum 350 for 24/7 GPU + DB).",
+    )
+    scaling_path: str = Field(
+        description=(
+            "Concrete 1-sentence GPU scaling and quantization tip, e.g., AWQ/FP8 quantization "
+            "with vLLM continuous batching and autoscaling groups (max 35 words)."
+        )
+    )
 
     @field_validator("model_stack", "why_this_stack", "scaling_path", "estimated_monthly_cost")
     @classmethod
@@ -662,25 +720,52 @@ class OpenSourceStackOption(BaseModel):
 
     @model_validator(mode="after")
     def enforce_aws_cost_floor(self):
-        if self.monthly_cost_number_usd < 120:
-            self.monthly_cost_number_usd = 220
+        # 24/7 AWS g5.xlarge + RDS PGVector realistically starts around $350-$450/mo
+        if self.monthly_cost_number_usd < 350:
+            self.monthly_cost_number_usd = 420
         if "$0" in self.estimated_monthly_cost and "API" not in self.estimated_monthly_cost:
-            self.estimated_monthly_cost = "$0 API fees + $220/month AWS Server ($190/mo AWS g5.2xlarge GPU + $30/mo storage)"
+            self.estimated_monthly_cost = (
+                "$420/mo infra ($0 API fees + $290/mo AWS g5.xlarge GPU + $130/mo RDS PGVector; "
+                "excludes MLOps maintenance labor)"
+            )
+        elif "excl" not in self.estimated_monthly_cost.lower() and "devops" not in self.estimated_monthly_cost.lower():
+            self.estimated_monthly_cost = sanitize_for_pdf(
+                f"{self.estimated_monthly_cost} (infra only; excludes DevOps/MLOps labor)"
+            )
         return self
 
 
 class FreeTierBlueprint(BaseModel):
-    project_short_title: str = Field(description="3 to 5 word catchy project title.")
+    project_short_title: str = Field(description="3 to 5 word executive project title.")
     feasibility_grade: Literal[
         "Grade A (Fast & Affordable to Build)",
         "Grade B (Moderate Cloud Compute Cost)",
         "Grade C (Complex Infrastructure Required)",
     ]
-    user_idea_summary: str = Field(description="Rich 2-sentence plain-English summary covering WHAT the system does, WHO the target user is, and their 6-MONTH GOAL (35-50 words).")
-    workflow_steps: List[str] = Field(description="Exactly 4 concise action steps (4-7 words each) showing end-to-end data flow.")
+    user_idea_summary: str = Field(
+        description=(
+            "Executive 2-sentence summary covering WHAT the system automates, WHO the primary users "
+            "and end beneficiaries are, and quantifiable 6-MONTH SLA/KPI GOALS (e.g., % deflection, "
+            "FRT target, ticket volume) (40-60 words)."
+        )
+    )
+    workflow_steps: List[str] = Field(
+        description=(
+            "Exactly 4 concrete architectural steps (6-12 words each) showing end-to-end data flow: "
+            "(1) API/webhook ingestion, (2) PII scrubbing & RAG retrieval, (3) LLM generation with "
+            "confidence scoring, (4) Deterministic fallback/escalation threshold (e.g., score < 0.85) with summary."
+        )
+    )
     paid_stack: PaidStackOption
     open_source_stack: OpenSourceStackOption
-    next_steps_recommendation: str = Field(description="2-sentence domain-specific architectural warning naming exact missing engineering components. Max 65 words.")
+    next_steps_recommendation: str = Field(
+        description=(
+            "2-sentence Principal Architect guardrail warning naming exact required production components: "
+            "(1) deterministic escalation rules (confidence/sentiment thresholds), and "
+            "(2) compliance architecture (e.g., GDPR DPA, EU region pinning, PII redaction, zero-data-retention API). "
+            "Max 75 words."
+        )
+    )
 
     @field_validator("project_short_title", "user_idea_summary", "next_steps_recommendation")
     @classmethod
@@ -691,8 +776,14 @@ class FreeTierBlueprint(BaseModel):
     @classmethod
     def ensure_four_steps(cls, v: List[str]) -> List[str]:
         cleaned = [sanitize_for_pdf(step) for step in v if step.strip()]
+        defaults = [
+            "Ingest live webhooks and order payloads via REST APIs",
+            "Scrub PII and retrieve policy context from vector DB",
+            "Generate grounded reply with deterministic confidence score check",
+            "Auto-escalate tickets below 0.85 confidence with agent summary",
+        ]
         while len(cleaned) < 4:
-            cleaned.append("Deliver Verified Output")
+            cleaned.append(defaults[len(cleaned)])
         return cleaned[:4]
 
 
@@ -726,7 +817,11 @@ def fetch_live_ai_model_research(user_idea: str, volume_privacy: str, modality: 
                 results = ddgs.text(q, max_results=3)
                 if results:
                     for r in results:
-                        clean_body = re.sub(r"https?://\S+|www\.\S+", "", f"{r.get('title', '')}: {r.get('body', '')}")
+                        clean_body = re.sub(
+                            r"https?://\S+|www\.\S+",
+                            "",
+                            f"{r.get('title', '')}: {r.get('body', '')}",
+                        )
                         snippets.append(f"- {clean_body.strip()}")
     except Exception:
         pass
@@ -753,17 +848,25 @@ def generate_assessment_from_llm(user_profile: str, core_idea: str, volume_priva
     lifecycle = _prepare_vault_generation(None, "1")
     modality = detect_primary_modality(core_idea)
     live_web_research = fetch_live_ai_model_research(core_idea, volume_privacy, modality)
-    system_prompt = """You are a principal AI solutions architect at PickModelAI.com creating a plain-English AI Feasibility Report.
+    
+    system_prompt = """You are a Principal AI Solutions Architect at PickModelAI.com authoring an executive-grade AI Architecture Diagnostic for CXOs and Lead Engineers.
 DETECTED PROJECT MODALITY: {modality}
 LIVE ONLINE RESEARCH RESULTS:
 <live_web_research>
 {live_web_research}
 </live_web_research>
-STRICT RULES:
-1. Match {modality} strictly. If TEXT_REASONING with secondary audio notes, center on LLM + RAG + Whisper batch transcription (do NOT design a telephony/TTS call-center stack).
-2. Option 1 = Managed Cloud API; Option 2 = Self-Hosted AWS VPC setup (minimum $120/mo GPU cost).
-3. Name exact missing engineering glue in next_steps_recommendation. Never output URLs.
-4. Use explicit assumptions and quantified estimates, distinguish estimates from verified facts, and avoid hype adjectives."""
+
+STRICT ARCHITECTURAL & CXO RULES:
+1. Modality Alignment: Match {modality} strictly. If TEXT_REASONING, design an API/webhook + RAG + structured output + deterministic router stack (do NOT include voice/video/telephony).
+2. Realistic TCO & Team Fit:
+   - Option 1 (Managed Cloud API): Highlight speed to market, zero MLOps maintenance for lean teams, and separate Prototype vs. Production monthly costs if the client states both budgets.
+   - Option 2 (Self-Hosted AWS VPC): Use realistic 24/7 AWS GPU pricing (minimum $350/mo for g5.xlarge + RDS PGVector). Explicitly warn in `why_this_stack` and `estimated_monthly_cost` that self-hosting requires DevOps/MLOps engineering labor that often outweighs raw compute savings for small teams.
+3. Deterministic Escalation Workflow: In `workflow_steps` (Step 4) and `next_steps_recommendation`, never write vague phrases like "escalate complex cases". Specify deterministic routing mechanisms (e.g., confidence score < 0.85, missing API order status, negative sentiment trigger, or refund threshold) that auto-generate structured handoff summaries.
+4. Data Residency & Privacy Architecture: If the client requests GDPR, EU servers, or "no model training on customer data", explicitly specify:
+   - EU region pinning (e.g., AWS `eu-central-1` Frankfurt / EU-hosted vector DB) instead of US-East-1 defaults.
+   - Enterprise Zero-Data-Retention (ZDR) API endpoints with a signed DPA.
+   - Pre-inference PII scrubbing/masking middleware before external LLM calls.
+5. Executive Precision: Include the client's exact KPIs (e.g., ticket volume, % deflection target, response time SLA, team size) in `user_idea_summary`. Avoid generic filler or hype adjectives."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -771,7 +874,7 @@ STRICT RULES:
     ])
     if ChatOpenAI is None:
         raise RuntimeError("The langchain-openai package is required to generate assessments.")
-    llm = ChatOpenAI(model=OPENAI_CHAT_MODEL, temperature=0.2, max_retries=2, timeout=60)
+    llm = ChatOpenAI(model=OPENAI_CHAT_MODEL, temperature=0.15, max_retries=2, timeout=60)
     structured_llm = llm.with_structured_output(FreeTierBlueprint)
     raw_res = (prompt | structured_llm).invoke({
         "modality": modality,
@@ -803,7 +906,7 @@ def save_product_a_to_vault(answers: List[str], blueprint_dict: dict) -> str:
         "paid_stack_summary": blueprint_dict.get("paid_stack", {}).get("model_stack", ""),
         "oss_stack_summary": blueprint_dict.get("open_source_stack", {}).get("model_stack", ""),
         "paid_monthly_cost_usd": int(blueprint_dict.get("paid_stack", {}).get("monthly_cost_number_usd", 0)),
-        "oss_monthly_cost_usd": int(blueprint_dict.get("open_source_stack", {}).get("monthly_cost_number_usd", 120)),
+        "oss_monthly_cost_usd": int(blueprint_dict.get("open_source_stack", {}).get("monthly_cost_number_usd", 350)),
     }
     ref_id = vault.save_blueprint_to_vault(
         user_inputs=user_inputs,
@@ -814,7 +917,6 @@ def save_product_a_to_vault(answers: List[str], blueprint_dict: dict) -> str:
     for key in ("vault_id", "lineage", "tiers_generated"):
         blueprint_dict[key] = vault_report_payload[key]
     return ref_id
-
 
 # ===========================================================================
 # 3. PRODUCT B: DIY ENGINEERING BLUEPRINT (SCHEMAS, ENGINE & 7-SECTION RENDERER)
